@@ -6,7 +6,7 @@
  */
 
 import { useState } from "react";
-import { FileIcon } from "./icons.js";
+import { FileTypeIcon, type FileTypeSets } from "./icons.js";
 import type { Tabs as TabsState } from "./useTabs.js";
 
 /** The current drop target: which tab row, and whether the line sits above it. */
@@ -15,7 +15,7 @@ interface DropMark {
   before: boolean;
 }
 
-export function Tabs({ tabs }: { tabs: TabsState }) {
+export function Tabs({ tabs, fileTypes }: { tabs: TabsState; fileTypes: FileTypeSets }) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropMark, setDropMark] = useState<DropMark | null>(null);
 
@@ -73,7 +73,7 @@ export function Tabs({ tabs }: { tabs: TabsState }) {
             onDragEnd={clearDrag}
           >
             <span className="nav-file-icon">
-              <FileIcon />
+              <FileTypeIcon path={tab.file} types={fileTypes} />
             </span>
             <span className="tab-name">{name}</span>
             {tab.unread && <span className="tab-dot" aria-label="unread activity" />}

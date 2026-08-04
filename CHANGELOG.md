@@ -4,6 +4,9 @@ All notable user-facing changes to mdc. Format loosely follows [Keep a Changelog
 
 ## [Unreleased]
 
+### Fixed
+- Open tabs now show the same per-file-type icon as the file tree, so an image, HTML file, PDF, or drawing is recognisable in the tabs strip instead of every tab sharing the markdown icon.
+
 ## [0.7.0] - 2026-07-24
 
 ### Added

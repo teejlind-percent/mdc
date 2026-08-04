@@ -35,7 +35,7 @@ export function FileIcon({ size = 14 }: { size?: number }) {
   );
 }
 
-export function ImageIcon({ size = 14 }: { size?: number }) {
+function ImageIcon({ size = 14 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" {...stroke} strokeWidth={1.8}>
       <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -45,7 +45,7 @@ export function ImageIcon({ size = 14 }: { size?: number }) {
   );
 }
 
-export function HtmlIcon({ size = 14 }: { size?: number }) {
+function HtmlIcon({ size = 14 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" {...stroke} strokeWidth={1.8}>
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -56,7 +56,7 @@ export function HtmlIcon({ size = 14 }: { size?: number }) {
   );
 }
 
-export function PdfIcon({ size = 14 }: { size?: number }) {
+function PdfIcon({ size = 14 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" {...stroke} strokeWidth={1.8}>
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -77,6 +77,27 @@ export function DrawingIcon({ size = 14 }: { size?: number }) {
       <path d="M4 4h7M4 9h4" />
     </svg>
   );
+}
+
+/** The type-classifying sets a file path is checked against, in precedence
+ *  order (drawing > image > html > pdf > generic). Shared by the file tree
+ *  and the tabs strip so a file's icon can't drift between the two. */
+export interface FileTypeSets {
+  images: Set<string>;
+  htmls: Set<string>;
+  pdfs: Set<string>;
+  drawings: Set<string>;
+}
+
+/** The per-file-type icon for `path`, checked against `types` in the same
+ *  drawing → image → html → pdf → generic precedence as the file tree. The
+ *  generic FileIcon doubles as the markdown icon — there's no separate one. */
+export function FileTypeIcon({ path, types, size }: { path: string; types: FileTypeSets; size?: number }) {
+  if (types.drawings.has(path)) return <DrawingIcon size={size} />;
+  if (types.images.has(path)) return <ImageIcon size={size} />;
+  if (types.htmls.has(path)) return <HtmlIcon size={size} />;
+  if (types.pdfs.has(path)) return <PdfIcon size={size} />;
+  return <FileIcon size={size} />;
 }
 
 export function FolderIcon({ size = 14, open = false }: { size?: number; open?: boolean }) {

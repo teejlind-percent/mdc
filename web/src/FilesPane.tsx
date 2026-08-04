@@ -14,7 +14,7 @@
 import { useMemo, useState } from "react";
 import type { FileCreateKind } from "./createName.js";
 import { buildTree, type TreeNode, workspaceRootName } from "./fileTree.js";
-import { DrawingIcon, FileIcon, FolderIcon, HtmlIcon, ImageIcon, PdfIcon } from "./icons.js";
+import { FileTypeIcon, type FileTypeSets, FolderIcon } from "./icons.js";
 import { InlineCreate } from "./InlineCreate.js";
 import { Tabs } from "./Tabs.js";
 import type { Tabs as TabsState } from "./useTabs.js";
@@ -80,10 +80,17 @@ export function FilesPane({
   actions: RowActions;
 }) {
   const { root: tree } = useMemo(() => buildTree(paths, dirs), [paths, dirs]);
-  const imageSet = useMemo(() => new Set(images), [images]);
-  const htmlSet = useMemo(() => new Set(htmls), [htmls]);
-  const pdfSet = useMemo(() => new Set(pdfs), [pdfs]);
-  const drawingSet = useMemo(() => new Set(drawings), [drawings]);
+  // One grouped set feeds both the tree rows and the tab strip, so the two
+  // can't classify the same file differently.
+  const fileTypes: FileTypeSets = useMemo(
+    () => ({
+      images: new Set(images),
+      htmls: new Set(htmls),
+      pdfs: new Set(pdfs),
+      drawings: new Set(drawings),
+    }),
+    [images, htmls, pdfs, drawings],
+  );
 
   // Drag-to-move state: the path being dragged, and the folder currently hovered
   // as a drop target (for the `.drop-into` highlight). "" = root; null = none.
@@ -125,7 +132,7 @@ export function FilesPane({
 
   return (
     <div className="files-pane">
-      <Tabs tabs={tabs} />
+      <Tabs tabs={tabs} fileTypes={fileTypes} />
       <div
         className={`nav-tree${dropDir === "" ? " drop-into-root" : ""}`}
         // Right-click in the empty area below the tree → create at root.
@@ -142,10 +149,7 @@ export function FilesPane({
           depth={0}
           expanded={expanded}
           activeFile={activeFile}
-          imageSet={imageSet}
-          htmlSet={htmlSet}
-          pdfSet={pdfSet}
-          drawingSet={drawingSet}
+          fileTypes={fileTypes}
           onToggleDir={onToggleDir}
           onOpenFile={onOpenFile}
           onOpenInNewTab={onOpenInNewTab}
@@ -171,10 +175,7 @@ function TreeLevel({
   depth,
   expanded,
   activeFile,
-  imageSet,
-  htmlSet,
-  pdfSet,
-  drawingSet,
+  fileTypes,
   onToggleDir,
   onOpenFile,
   onOpenInNewTab,
@@ -185,10 +186,7 @@ function TreeLevel({
   depth: number;
   expanded: Set<string>;
   activeFile: string | null;
-  imageSet: Set<string>;
-  htmlSet: Set<string>;
-  pdfSet: Set<string>;
-  drawingSet: Set<string>;
+  fileTypes: FileTypeSets;
   onToggleDir: (path: string) => void;
   onOpenFile: (file: string) => void;
   onOpenInNewTab: (file: string) => void;
@@ -239,17 +237,7 @@ function TreeLevel({
             onContextMenu={(e) => actions.onContextMenu(e, { kind: "file", path: file })}
           >
             <span className="nav-file-icon">
-              {drawingSet.has(file) ? (
-                <DrawingIcon />
-              ) : imageSet.has(file) ? (
-                <ImageIcon />
-              ) : htmlSet.has(file) ? (
-                <HtmlIcon />
-              ) : pdfSet.has(file) ? (
-                <PdfIcon />
-              ) : (
-                <FileIcon />
-              )}
+              <FileTypeIcon path={file} types={fileTypes} />
             </span>
             <span className="nav-path">{name}</span>
           </a>
@@ -294,10 +282,7 @@ function TreeLevel({
                 depth={depth + 1}
                 expanded={expanded}
                 activeFile={activeFile}
-                imageSet={imageSet}
-                htmlSet={htmlSet}
-                pdfSet={pdfSet}
-                drawingSet={drawingSet}
+                fileTypes={fileTypes}
                 onToggleDir={onToggleDir}
                 onOpenFile={onOpenFile}
                 onOpenInNewTab={onOpenInNewTab}
