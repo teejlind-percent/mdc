@@ -4,6 +4,8 @@ All notable user-facing changes to mdc. Format loosely follows [Keep a Changelog
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-04
+
 ### Added
 - Mini apps can open external links with `window.mdc.openUrl(url)`, which opens the link in a new browser tab. Previously an app had no way to link out at all — the sandbox blocks popups, so a plain `<a target="_blank">` did nothing. Only `https:`, `http:`, and `mailto:` URLs are opened; anything else is refused and the call rejects.
 

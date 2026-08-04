@@ -1,6 +1,6 @@
 {
   "name": "mdc-workspace",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "A local markdown workspace where humans and coding agents review docs together — margin comments and agent-suggested edits anchored to the text, stored beside each file; the doc changes only when you accept. Renders markdown, images, HTML, and PDF; trusted HTML files run as mini apps.",
   "type": "module",
   "author": "Yang-Cheng Chen",
