@@ -10,13 +10,17 @@
  * The injected `window.mdc` bridge (app-bridge.ts) posts requests to the parent;
  * the handler here performs the real /api/app/* call and posts the result back.
  * The parent is the single gate through which all file access flows.
+ *
+ * The sandbox also withholds `allow-popups`, so an app can't open a tab itself;
+ * external links go through `openUrl` here, where the scheme is checked first
+ * (docs/adr/0005). Keep it that way — the gate only works if it's the only door.
  */
 
 import { useEffect, useRef, useState } from "react";
 import { AppPermissionCard } from "./AppPermissionCard.js";
 import { APP_BRIDGE_SOURCE, type BridgeRequest, type BridgeReply, type BridgeNotify } from "./app-bridge.js";
 import { ApiError, fetchAppInfo, fetchHtmlFile } from "./api.js";
-import { isBeyondFolder } from "./app-scope.js";
+import { isBeyondFolder, vetExternalUrl } from "./app-scope.js";
 
 /** Cap on a single app's persisted state blob — sessionStorage is small, and
  * this is opaque UI state, not a data store. */
@@ -230,6 +234,18 @@ export function AppView({
         });
         if (!r.ok) throw new Error((await r.text()) || `open failed: ${path}`);
         return r.json();
+      }
+      if (method === "openUrl") {
+        // Outbound navigation, mediated: the app can't open a tab itself (the
+        // sandbox withholds allow-popups precisely so it can't), so it asks the
+        // parent. The scheme allowlist is the only control here — the app is
+        // already trusted, so there's no prompt — which is why it denies by
+        // default: javascript:/data: URLs would run code or smuggle content
+        // out of the frame's opaque origin. See docs/adr/0005.
+        const href = vetExternalUrl(String(args[0] ?? ""));
+        // noopener keeps the new tab from reaching back via window.opener.
+        window.open(href, "_blank", "noopener,noreferrer");
+        return { opened: true };
       }
       if (method === "getState") {
         // Parent-persisted, per-app opaque state. The parent is same-origin and

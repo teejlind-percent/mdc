@@ -4,6 +4,9 @@ All notable user-facing changes to mdc. Format loosely follows [Keep a Changelog
 
 ## [Unreleased]
 
+### Added
+- Mini apps can open external links with `window.mdc.openUrl(url)`, which opens the link in a new browser tab. Previously an app had no way to link out at all — the sandbox blocks popups, so a plain `<a target="_blank">` did nothing. Only `https:`, `http:`, and `mailto:` URLs are opened; anything else is refused and the call rejects.
+
 ### Fixed
 - Open tabs now show the same per-file-type icon as the file tree, so an image, HTML file, PDF, or drawing is recognisable in the tabs strip instead of every tab sharing the markdown icon.
 

@@ -62,6 +62,7 @@ To reach *beyond* its own folder, an app declares explicit read/write scopes:
     // Environment / navigation
     window.mdc.getAppInfo()                       → { appPath, rootName, name, permissions, trusted }
     window.mdc.openFile(path)                     → { delivered: true }
+    window.mdc.openUrl(url)                       → { opened: true }
 
 **Applies to every call:** available only inside a trusted app frame; all methods return Promises (except `watch`, which returns its unsubscribe function synchronously); every call is permission-checked against the manifest scope on the server. An out-of-scope, untrusted, denied, or conflicting call **rejects** — wrap calls in try/catch and surface the error to the user, never assume success.
 
@@ -137,6 +138,27 @@ Returns the app's own manifest-declared identity + scopes + trust state — for 
 
 Asks mdc to open a file as a workspace tab — switches to the file's tab if already open, else adds a new tab. Navigational, not file access (it grants nothing the bridge doesn't already): use it to let an app link out to the workspace files it surfaces. The path must be an openable file in the index (doc, image, html, or PDF) or the call rejects.
 
+### `openUrl(url)` → `{ opened: true }`
+
+Asks mdc to open an external link in a new browser tab. **This is the only way an app can link out** — the sandbox withholds popup and top-navigation permission, so a plain `<a href="https://…" target="_blank">` inside an app does nothing. Wire links to `openUrl` instead:
+
+    document.querySelector("#docs-link").addEventListener("click", async (e) => {
+      e.preventDefault();
+      try {
+        await window.mdc.openUrl("https://example.com/docs");
+      } catch (err) {
+        showInlineMessage(err.message);   // your UI — mdc shows nothing itself
+      }
+    });
+
+`url` must be **absolute** and use an allowed scheme: `https:`, `http:`, or `mailto:`. Everything else — `javascript:`, `data:`, `blob:`, `file:`, and relative paths — rejects without opening anything. The allowlist is deny-by-default and is the only gate on outbound navigation, so it stays deliberately narrow.
+
+There is no prompt: the user already trusted this exact version of your app, and a confirmation on every link would make ordinary links feel broken.
+
+**Handle the rejection.** mdc draws no UI when a URL is refused — it blocks the navigation and rejects the promise, nothing more. If your app ignores the error, the click is a silent no-op and the user is left guessing, which matters most when the URL came from *their* data (a link in a note, a value in a config) rather than from your source. Catch it and say something.
+
+One caveat outside mdc's control: the tab is opened by mdc on your behalf, not by a click the browser attributes to the user, so a strict popup blocker can swallow it. The promise still resolves — mdc can't reliably tell an opened tab from a blocked one — so don't treat resolution as proof the user saw the page.
+
 ## Sandbox limits — read this before you build
 
 The app runs in `sandbox="allow-scripts"`: scripts run, but **every other browser capability is off by design.** In particular:
@@ -144,7 +166,7 @@ The app runs in `sandbox="allow-scripts"`: scripts run, but **every other browse
 - **No `prompt()`, `confirm()`, `alert()`** — modals are not enabled. Use inline UI (an editable field, an inline confirm row) instead. The Kanban example does exactly this.
 - **No parent/app access** — the frame is opaque-origin. The app can't reach mdc's DOM or call its API except through `window.mdc`. This is the security boundary.
 - **No `localStorage` / `sessionStorage`** — the opaque origin has no web storage; accessing it directly throws. mdc also unmounts the app when you leave its tab and re-runs it from scratch on return, so in-memory state is lost too. So: re-read your data from disk on load, and to *remember* UI state (a selection, a setting) across remounts use `window.mdc.getState()`/`setState()` (above) — the parent-mediated store — not browser storage.
-- **No popups, forms posting out, top-navigation, etc.** — not enabled.
+- **No popups, forms posting out, top-navigation, etc.** — not enabled. So a plain `<a target="_blank">` is inert; to link out, call `openUrl` (above), which mdc performs for you after checking the scheme.
 - **mdc's ⌘-shortcuts don't fire while focus is in the app** — keyboard events don't bubble out of the sandbox. Click into the app to use it, out to use mdc.
 
 Build the app to live within these limits: do all interaction inline, using only `window.mdc` for file access. If your app genuinely needs a capability the bridge doesn't offer (reading another file type, an mdc-native dialog), that's a request to extend `window.mdc` — raise it with the mdc maintainers rather than trying to widen the sandbox, which is deliberately locked down.

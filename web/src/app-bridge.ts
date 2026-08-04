@@ -90,6 +90,7 @@ export const APP_BRIDGE_SOURCE = `
     readFrontmatter: function (path, opts) { return call("readFrontmatter", [path, opts]); },
     getAppInfo: function () { return call("getAppInfo", []); },
     openFile: function (path) { return call("openFile", [path]); },
+    openUrl: function (url) { return call("openUrl", [url]); },
     getState: function () { return call("getState", []); },
     setState: function (state) { return call("setState", [state]); },
     watch: function (cb) {
