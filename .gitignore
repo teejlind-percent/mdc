@@ -1,6 +1,11 @@
 node_modules/
-dist/
 web/dist-dev/
+
+# Percent fork: build output IS committed here. `npm install -g github:...`
+# runs npm's git-dep preparation without devDependencies, so a `prepare`
+# script cannot build (vite is not on PATH there). Shipping prebuilt makes
+# installs deterministic and toolchain-free. Rebuild + commit after any
+# source change: npm run build && git add -f dist web/dist
 .DS_Store
 
 # Local workspace config (identity + app trust) — each user/root sets its own; .mdc.toml.example is committed

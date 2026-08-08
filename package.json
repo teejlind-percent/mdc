@@ -36,8 +36,7 @@
     "build:web:dev": "vite build --config web/vite.config.ts web --outDir dist-dev",
     "ship": "scripts/ship.sh",
     "typecheck:web": "tsc --noEmit -p web/tsconfig.json",
-    "knip": "knip",
-    "prepare": "npm run build"
+    "knip": "knip"
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.3",
