@@ -35,6 +35,10 @@ const CONCEALED_IN_LINK = new Set(["URL"]);
 
 const hidden = Decoration.replace({});
 const codeMark = Decoration.mark({ class: "cm-md-code" });
+// Tables are the one construct a proportional face actively breaks: the pipes
+// stop lining up and the source becomes unreadable while you edit it. A line
+// decoration keeps the whole table monospace so the columns stay square.
+const tableLine = Decoration.line({ class: "cm-md-table" });
 
 /**
  * Lines the caret or a selection touches. Those keep their raw markdown, so the
@@ -58,6 +62,7 @@ function buildDecorations(view: EditorView): DecorationSet {
   // concealed backticks fought, and the mark lost.
   const marks: Array<Range<Decoration>> = [];
   const replaces: Array<Range<Decoration>> = [];
+  const lines: Array<Range<Decoration>> = [];
 
   for (const { from, to } of view.visibleRanges) {
     syntaxTree(view.state).iterate({
@@ -70,6 +75,17 @@ function buildDecorations(view: EditorView): DecorationSet {
         // it is the only signal left once the backticks are concealed.
         if (node.name === "InlineCode" || node.name === "FencedCode" || node.name === "CodeBlock") {
           marks.push({ from: node.from, to: node.to, value: codeMark });
+          return;
+        }
+
+        // Whole-table monospace, applied per line so column alignment survives.
+        if (node.name === "Table") {
+          const first = view.state.doc.lineAt(node.from).number;
+          const last = view.state.doc.lineAt(node.to).number;
+          for (let n = first; n <= last; n++) {
+            const line = view.state.doc.line(n);
+            lines.push({ from: line.from, to: line.from, value: tableLine });
+          }
           return;
         }
 
@@ -110,7 +126,7 @@ function buildDecorations(view: EditorView): DecorationSet {
     deduped.push(r);
     lastTo = r.to;
   }
-  return Decoration.set([...marks, ...deduped], true);
+  return Decoration.set([...lines, ...marks, ...deduped], true);
 }
 
 const livePreviewPlugin = ViewPlugin.fromClass(
@@ -145,6 +161,11 @@ const livePreviewTheme = EditorView.theme({
   ".cm-md-code": {
     fontFamily: "var(--mono-font, ui-monospace, SFMono-Regular, Menlo, monospace)",
     fontSize: "0.92em",
+  },
+  ".cm-md-table": {
+    fontFamily: "var(--mono-font, ui-monospace, SFMono-Regular, Menlo, monospace)",
+    fontSize: "0.9em",
+    fontVariantNumeric: "tabular-nums",
   },
 });
 

@@ -5,7 +5,12 @@
  */
 
 import { indentWithTab } from "@codemirror/commands";
-import { insertNewlineContinueMarkup, deleteMarkupBackward, markdown } from "@codemirror/lang-markdown";
+import {
+  insertNewlineContinueMarkup,
+  deleteMarkupBackward,
+  markdown,
+  markdownLanguage,
+} from "@codemirror/lang-markdown";
 import { indentUnit } from "@codemirror/language";
 import { Prec } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
@@ -21,7 +26,11 @@ export function createEditorExtensions(openPalette: () => void, imagePaste?: Ima
     // bullets but flattens numbered lists in the renderer). Tab/continuation
     // both follow this unit, so nesting in the editor matches view mode.
     indentUnit.of("    "),
-    markdown({ extensions: transientSetextHeadingExtension }),
+    // GFM base, not the commonmark default: the rendered view parses with GFM
+    // (marked), so without it the editor disagrees with the renderer about what
+    // the document even contains — tables and strikethrough parse as plain
+    // paragraphs, which means no table styling and no way to conceal ~~ marks.
+    markdown({ base: markdownLanguage, extensions: transientSetextHeadingExtension }),
     markdownHighlightExtension,
     // Bear-style: conceal inline markup except on the line being edited. Purely
     // decorative — the document stays plain markdown.
