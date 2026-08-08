@@ -110,8 +110,67 @@ export function hunkBody(hunk: EditHunk, author: string): string {
 }
 
 /**
- * Cap on threads written for a single save. A wholesale rewrite should not bury
- * the margin under a hundred cards; past the cap the caller writes one summary
- * instead, which is more useful anyway.
+ * Cap on threads written for a single capture. A wholesale rewrite should not
+ * bury the margin under a hundred cards; past the cap the caller writes one
+ * summary instead, which is more useful anyway.
  */
 export const MAX_CAPTURED_HUNKS = 15;
+
+/**
+ * How long editing must be quiet before a capture is written.
+ *
+ * The editor autosaves on a 600ms debounce, so a save is not an edit — it is a
+ * pause in typing. Capturing per save turns one reworded sentence into a stream
+ * of threads recording half-typed fragments (`was: "targ" now: "targe"`). This
+ * has to be comfortably longer than the autosave debounce, and long enough to
+ * cover the pauses inside normal writing: rereading a line, fixing a typo three
+ * words back.
+ */
+export const CAPTURE_SETTLE_MS = 5_000;
+
+/**
+ * Coalesces a burst of saves into one capture.
+ *
+ * Holds the content as it stood before the burst began, and fires `onSettle`
+ * with that baseline once writing has been quiet for `CAPTURE_SETTLE_MS`. The
+ * baseline is the *pre-burst* content, so the diff describes the whole edit the
+ * user made rather than the last keystroke of it.
+ */
+export class CaptureBuffer {
+  private pending = new Map<string, { baseline: string; timer: ReturnType<typeof setTimeout> }>();
+
+  constructor(
+    private readonly onSettle: (key: string, baseline: string) => void,
+    private readonly settleMs: number = CAPTURE_SETTLE_MS,
+  ) {}
+
+  /** Record a save. `previous` is the content on disk before this write. */
+  note(key: string, previous: string): void {
+    const existing = this.pending.get(key);
+    if (existing) clearTimeout(existing.timer);
+    // Keep the FIRST baseline of the burst; later saves are mid-edit states.
+    const baseline = existing?.baseline ?? previous;
+    const timer = setTimeout(() => {
+      this.pending.delete(key);
+      this.onSettle(key, baseline);
+    }, this.settleMs);
+    // Never hold the process open for a pending capture.
+    (timer as unknown as { unref?: () => void }).unref?.();
+    this.pending.set(key, { baseline, timer });
+  }
+
+  /** Fire any pending capture for `key` immediately (e.g. the file was closed). */
+  flush(key: string): void {
+    const existing = this.pending.get(key);
+    if (!existing) return;
+    clearTimeout(existing.timer);
+    this.pending.delete(key);
+    this.onSettle(key, existing.baseline);
+  }
+
+  /** Drop everything without firing — for shutdown and tests. */
+  clear(): void {
+    for (const { timer } of this.pending.values()) clearTimeout(timer);
+    this.pending.clear();
+  }
+}

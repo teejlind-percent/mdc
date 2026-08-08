@@ -335,6 +335,41 @@ was: ${q(hunk.before)}
 now: ${q(hunk.after)}`;
 }
 var MAX_CAPTURED_HUNKS = 15;
+var CAPTURE_SETTLE_MS = 5e3;
+var CaptureBuffer = class {
+  constructor(onSettle, settleMs = CAPTURE_SETTLE_MS) {
+    this.onSettle = onSettle;
+    this.settleMs = settleMs;
+  }
+  onSettle;
+  settleMs;
+  pending = /* @__PURE__ */ new Map();
+  /** Record a save. `previous` is the content on disk before this write. */
+  note(key, previous) {
+    const existing = this.pending.get(key);
+    if (existing) clearTimeout(existing.timer);
+    const baseline = existing?.baseline ?? previous;
+    const timer = setTimeout(() => {
+      this.pending.delete(key);
+      this.onSettle(key, baseline);
+    }, this.settleMs);
+    timer.unref?.();
+    this.pending.set(key, { baseline, timer });
+  }
+  /** Fire any pending capture for `key` immediately (e.g. the file was closed). */
+  flush(key) {
+    const existing = this.pending.get(key);
+    if (!existing) return;
+    clearTimeout(existing.timer);
+    this.pending.delete(key);
+    this.onSettle(key, existing.baseline);
+  }
+  /** Drop everything without firing — for shutdown and tests. */
+  clear() {
+    for (const { timer } of this.pending.values()) clearTimeout(timer);
+    this.pending.clear();
+  }
+};
 
 // src/apps/manifest.ts
 var ManifestError = class extends Error {
@@ -1020,9 +1055,37 @@ function createApp(cfg) {
     }
     return c.json({ content, filename: baseName(mdPath), path: file, version: fileVersion(content) });
   });
+  const captures = new CaptureBuffer((mdPath, baseline) => {
+    try {
+      const current = readFileSync3(mdPath, "utf8");
+      const hunks = diffEdits(baseline, current);
+      if (hunks.length === 0) return;
+      const scPath = sidecarPath(mdPath);
+      const write = (body, quote) => {
+        appendEntry(scPath, {
+          id: newId(),
+          file: basename(mdPath),
+          anchor: { quote },
+          parent_id: null,
+          author: cfg.user,
+          body,
+          timestamp: nowIso()
+        });
+      };
+      if (hunks.length > MAX_CAPTURED_HUNKS) {
+        write(
+          `\u270F\uFE0F ${cfg.user} rewrote this document while reviewing \u2014 ${hunks.length} separate changes, too many to thread individually. Diff it against your copy rather than reading them one by one.`,
+          hunks[0].quote
+        );
+      } else {
+        for (const h of hunks) write(hunkBody(h, cfg.user), h.quote);
+      }
+    } catch {
+    }
+  });
   app.put("/api/md", async (c) => {
     const file = requireQuery(c, "file");
-    const { mdPath, scPath } = resolveFile(cfg.root, state.index, file);
+    const { mdPath } = resolveFile(cfg.root, state.index, file);
     const b = await c.req.json();
     if (typeof b.content !== "string") throw new HttpError(400, "content required");
     let previous;
@@ -1042,30 +1105,7 @@ function createApp(cfg) {
       throw new HttpError(500, `failed to write: ${file}`);
     }
     if (previous !== null && process.env.MDC_NO_EDIT_CAPTURE !== "1") {
-      try {
-        const hunks = diffEdits(previous, b.content);
-        const write = (body, quote) => {
-          appendEntry(scPath, {
-            id: newId(),
-            file: basename(mdPath),
-            anchor: { quote },
-            parent_id: null,
-            author: cfg.user,
-            body,
-            timestamp: nowIso()
-          });
-        };
-        if (hunks.length > MAX_CAPTURED_HUNKS) {
-          const first = hunks[0];
-          write(
-            `\u270F\uFE0F ${cfg.user} rewrote this document while reviewing \u2014 ${hunks.length} separate changes, too many to thread individually. Diff it against your copy rather than reading them one by one.`,
-            first.quote
-          );
-        } else {
-          for (const h of hunks) write(hunkBody(h, cfg.user), h.quote);
-        }
-      } catch {
-      }
+      captures.note(mdPath, previous);
     }
     return c.json({ ok: true, path: file, version: fileVersion(b.content) });
   });

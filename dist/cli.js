@@ -522,7 +522,7 @@ async function cmdServe(root, opts) {
     }
   }
   if (opts.foreground) {
-    const { startServer } = await import("./serve-QRJFO5TJ.js");
+    const { startServer } = await import("./serve-YK7HD56N.js");
     await startServer(root, {
       port: opts.port,
       deny: opts.deny,

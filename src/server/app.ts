@@ -53,7 +53,7 @@ import {
   walkFiles,
 } from "./walk.js";
 import { HandoffRegistry } from "./handoff-state.js";
-import { diffEdits, hunkBody, MAX_CAPTURED_HUNKS } from "../edit-capture.js";
+import { CaptureBuffer, diffEdits, hunkBody, MAX_CAPTURED_HUNKS } from "../edit-capture.js";
 import { parseManifest, ManifestError, type AppManifest } from "../apps/manifest.js";
 import { canRead, canWrite, fileVersion } from "../apps/scope.js";
 import { isTrusted, trustApp } from "../apps/trust.js";
@@ -307,9 +307,45 @@ export function createApp(cfg: ServerConfig): {
   // Overwrite a doc's content on disk. The only route that writes the .md
   // itself (all others write the sidecar). Same index + traversal confinement
   // as the read route, so it can never write outside the served root.
+  // Writes the threads for a settled edit burst. Diffs the content from before
+  // the burst against the file as it now stands, so the record describes the
+  // whole edit rather than its last keystroke.
+  const captures = new CaptureBuffer((mdPath, baseline) => {
+    try {
+      const current = readFileSync(mdPath, "utf8");
+      const hunks = diffEdits(baseline, current);
+      if (hunks.length === 0) return;
+      const scPath = sidecarPath(mdPath);
+      const write = (body: string, quote: string): void => {
+        appendEntry(scPath, {
+          id: newId(),
+          file: basename(mdPath),
+          anchor: { quote },
+          parent_id: null,
+          author: cfg.user,
+          body,
+          timestamp: nowIso(),
+        });
+      };
+      if (hunks.length > MAX_CAPTURED_HUNKS) {
+        write(
+          `✏️ ${cfg.user} rewrote this document while reviewing — ${hunks.length} separate ` +
+            `changes, too many to thread individually. Diff it against your copy rather than ` +
+            `reading them one by one.`,
+          hunks[0]!.quote,
+        );
+      } else {
+        for (const h of hunks) write(hunkBody(h, cfg.user), h.quote);
+      }
+    } catch {
+      // Best-effort: never let a diff or sidecar failure escape into the server.
+      // The edit itself is already safely on disk.
+    }
+  });
+
   app.put("/api/md", async (c) => {
     const file = requireQuery(c, "file");
-    const { mdPath, scPath } = resolveFile(cfg.root, state.index, file);
+    const { mdPath } = resolveFile(cfg.root, state.index, file);
     const b = await c.req.json<{ content?: string; baseVersion?: string }>();
     if (typeof b.content !== "string") throw new HttpError(400, "content required");
     // Kept for edit capture below — read before the write, not after.
@@ -336,36 +372,12 @@ export function createApp(cfg: ServerConfig): {
     // browser (agents write through the CLI and the filesystem), so record what
     // they changed as threads they authored. The write above already happened
     // and is untouched by this — the threads are a notification, not a gate.
-    // MDC_NO_EDIT_CAPTURE=1 turns it off.
+    //
+    // Deliberately NOT written here: the editor autosaves on a 600ms debounce,
+    // so one reworded sentence arrives as several saves. Hand it to the buffer,
+    // which fires once writing has settled. MDC_NO_EDIT_CAPTURE=1 turns it off.
     if (previous !== null && process.env.MDC_NO_EDIT_CAPTURE !== "1") {
-      try {
-        const hunks = diffEdits(previous, b.content);
-        const write = (body: string, quote: string): void => {
-          appendEntry(scPath, {
-            id: newId(),
-            file: basename(mdPath),
-            anchor: { quote },
-            parent_id: null,
-            author: cfg.user,
-            body,
-            timestamp: nowIso(),
-          });
-        };
-        if (hunks.length > MAX_CAPTURED_HUNKS) {
-          const first = hunks[0]!;
-          write(
-            `✏️ ${cfg.user} rewrote this document while reviewing — ${hunks.length} separate ` +
-              `changes, too many to thread individually. Diff it against your copy rather than ` +
-              `reading them one by one.`,
-            first.quote,
-          );
-        } else {
-          for (const h of hunks) write(hunkBody(h, cfg.user), h.quote);
-        }
-      } catch {
-        // Capture is best-effort: never fail a save because the diff or the
-        // sidecar append went wrong. The edit itself is already on disk.
-      }
+      captures.note(mdPath, previous);
     }
     return c.json({ ok: true, path: file, version: fileVersion(b.content) });
   });
