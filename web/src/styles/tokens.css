@@ -4,6 +4,12 @@
      pane. The comment margin is also drag-resizable (see percent-ui.ts). */
   --sidebar-w: 300px;
   --nav-w: 200px;
+  /* Percent: edit mode renders markdown as you type, so its prose face should
+     match the rendered view rather than the source-code face it used to use.
+     Code inside it stays monospace — see livePreview.ts. */
+  --doc-font:
+    "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono-font: ui-monospace, "SF Mono", Menlo, monospace;
   --bg: #f7f4ef;
   --nav-bg: #edeae3;
   --surface: #ffffff;

@@ -219,8 +219,10 @@
 .editor-cm {
   background: var(--surface);
   color: var(--text);
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 14px;
+  /* Percent: prose face, because edit mode now conceals markup and reads as the
+     document. Code spans and fences are re-monospaced by livePreview.ts. */
+  font-family: var(--doc-font);
+  font-size: 15px;
   line-height: 1.7;
 }
 .editor-cm .cm-content {

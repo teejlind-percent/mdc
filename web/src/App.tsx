@@ -187,6 +187,14 @@ export function App() {
   // model so it survives tab switches but not reloads. A file in this set renders
   // the editor; others render the rendered doc.
   const [editingFiles, setEditingFiles] = useState<Set<string>>(new Set());
+  // Percent: markdown opens in the editor, not the rendered view. Edit mode
+  // renders markdown as you type (see editor/livePreview.ts), so it is the
+  // document — there is no reason to make writing a mode you have to switch
+  // into. This set records the files the user explicitly sent BACK to the
+  // rendered view, which is what stops the effect below from overriding them.
+  // The rendered view still earns its place: mermaid, images, tables and
+  // highlighted code only exist there.
+  const [pinnedToView, setPinnedToView] = useState<Set<string>>(new Set());
 
   // When the active surface is NOT a restoring <Doc> (non-md/editor), it
   // never fires onAnchorsPainted — so settle the scroll-switch handshake here,
@@ -274,7 +282,24 @@ export function App() {
       else next.add(file);
       return next;
     });
-  }, [isDrawing]);
+    // Remember a deliberate move to the rendered view so the default-to-editor
+    // effect does not immediately undo it.
+    setPinnedToView((prev) => {
+      const next = new Set(prev);
+      if (editingFiles.has(file)) next.add(file);
+      else next.delete(file);
+      return next;
+    });
+  }, [isDrawing, editingFiles]);
+
+  // Open markdown straight into the editor unless the user pinned this file to
+  // the rendered view. Non-markdown surfaces (images, PDFs, drawings, HTML
+  // apps) are untouched — they have no editor to default to.
+  useEffect(() => {
+    if (!activeFile || !typeKnown || isNonMd(activeFile)) return;
+    if (pinnedToView.has(activeFile) || editingFiles.has(activeFile)) return;
+    setEditingFiles((prev) => new Set(prev).add(activeFile));
+  }, [activeFile, typeKnown, isNonMd, pinnedToView, editingFiles]);
   // Content an editor surface last wrote per file, so we can ignore the disk-change
   // event our own save echoes back (the watcher can't tell our write from an
   // external edit, and the event lands AFTER the save resolves — so a time-based

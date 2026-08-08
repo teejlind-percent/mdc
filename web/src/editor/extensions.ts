@@ -10,6 +10,7 @@ import { indentUnit } from "@codemirror/language";
 import { Prec } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { markdownHighlightExtension } from "./markdownHighlight.js";
+import { livePreviewExtension } from "./livePreview.js";
 import { imagePasteExtension, type ImagePasteOptions } from "./imagePaste.js";
 import { transientSetextHeadingExtension } from "./transientSetextHeading.js";
 
@@ -22,6 +23,9 @@ export function createEditorExtensions(openPalette: () => void, imagePaste?: Ima
     indentUnit.of("    "),
     markdown({ extensions: transientSetextHeadingExtension }),
     markdownHighlightExtension,
+    // Bear-style: conceal inline markup except on the line being edited. Purely
+    // decorative — the document stays plain markdown.
+    livePreviewExtension,
     ...(imagePaste ? [imagePasteExtension(imagePaste)] : []),
     // Prec.highest so ⌘/ opens the palette instead of CodeMirror's default
     // Mod-/ = toggleComment (which otherwise shadows it). The shadowing is
