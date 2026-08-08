@@ -10,19 +10,48 @@
 import mermaid from "mermaid";
 
 // Re-initialize when the resolved theme changes: mermaid bakes its theme into the
-// SVG at render time, so a light↔dark flip needs a fresh init + re-render. "neutral"
-// for light (matches the warm/quiet light palette); "dark" for dark.
+// SVG at render time, so a light↔dark flip needs a fresh init + re-render.
 let initializedFor: "light" | "dark" | null = null;
 function currentTheme(): "light" | "dark" {
   return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
 }
+
+/* Percent: diagrams used mermaid's stock "neutral"/"dark" themes, so a diagram was
+   the one thing on the page rendering in library grey — visibly not part of the
+   document it sat in. Reading the values out of the CSS custom properties instead
+   of hardcoding them keeps tokens.css the single source of truth: retune a token
+   there and diagrams follow, in both themes, with no second palette to maintain. */
+function tok(name: string, fallback: string): string {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v || fallback;
+}
+
 function ensureInit(): void {
   const theme = currentTheme();
   if (initializedFor === theme) return;
+  const dark = theme === "dark";
+  const text = tok("--text", dark ? "#f1f1f3" : "#0e0e10");
+  const accent = tok("--accent", dark ? "#9d9bf5" : "#6661ed");
+  const surface = tok("--surface", dark ? "#17171a" : "#ffffff");
   mermaid.initialize({
     startOnLoad: false,
-    theme: theme === "dark" ? "dark" : "neutral",
+    // "base" is the only built-in that honours themeVariables.
+    theme: "base",
     securityLevel: "strict",
+    fontFamily: tok("--doc-font", "sans-serif"),
+    themeVariables: {
+      background: surface,
+      mainBkg: tok("--accent-tint", dark ? "#1e1d2e" : "#f0effd"),
+      primaryColor: tok("--accent-tint", dark ? "#1e1d2e" : "#f0effd"),
+      primaryTextColor: text,
+      primaryBorderColor: accent,
+      nodeBorder: accent,
+      lineColor: tok("--text-muted", dark ? "#a0a0a8" : "#757579"),
+      textColor: text,
+      secondaryColor: tok("--code-bg", dark ? "#26262b" : "#f1f1f3"),
+      tertiaryColor: tok("--bg-soft", dark ? "#1c1c20" : "#fafafc"),
+      fontSize: "14px",
+    },
   });
   initializedFor = theme;
 }

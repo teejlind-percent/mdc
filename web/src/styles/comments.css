@@ -393,7 +393,7 @@
   background: var(--toast-bg);
   color: var(--toast-text);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-  font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--ui-font);
 }
 .suggestion-preview-actions button {
   border: 0;

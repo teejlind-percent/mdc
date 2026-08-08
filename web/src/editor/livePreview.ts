@@ -35,6 +35,8 @@ import {
   WidgetType,
 } from "@codemirror/view";
 
+import { renderMermaid } from "../render/mermaid.js";
+
 /** Split a GFM table row on unescaped pipes, dropping the leading/trailing ones. */
 function splitRow(line: string): string[] {
   const cells: string[] = [];
@@ -146,6 +148,82 @@ class TableWidget extends WidgetType {
   }
 }
 
+/**
+ * A rendered diagram standing in for its ```mermaid fence, on the same terms as
+ * TableWidget: click it (or move the caret in) and you get the source back.
+ *
+ * Percent: this exists because the fork made the editor the default surface for
+ * markdown. Before that, a document opened in the rendered view and a diagram
+ * simply drew; afterwards, every doc with a diagram opened showing a wall of
+ * fence source, and the only way to see the picture was to know about the view
+ * toggle. Tables got this treatment first; a diagram is the construct where raw
+ * source is *least* useful, so it needs it more, not less.
+ */
+class MermaidWidget extends WidgetType {
+  private cleanup: (() => void) | null = null;
+
+  constructor(
+    private readonly src: string,
+    private readonly from: number,
+  ) {
+    super();
+  }
+
+  eq(other: MermaidWidget): boolean {
+    return this.from === other.from && this.src === other.src;
+  }
+
+  toDOM(view: EditorView): HTMLElement {
+    const wrap = document.createElement("div");
+    wrap.className = "cm-md-mermaid-render";
+    const host = document.createElement("div");
+    host.className = "mermaid";
+    host.textContent = this.src;
+    wrap.appendChild(host);
+
+    // renderMermaid skips detached nodes on purpose (mermaid throws deep inside
+    // its d3-selection code otherwise), and CodeMirror has not attached this
+    // widget yet when toDOM returns — so paint on the next frame instead.
+    const paint = (): void => {
+      if (!wrap.isConnected) return;
+      void renderMermaid(wrap);
+    };
+    requestAnimationFrame(paint);
+
+    // The SVG bakes its theme in at render time, and a light↔dark flip changes
+    // neither the document nor the selection — so the decoration set never
+    // recomputes and the widget is never rebuilt. It has to repaint itself.
+    const onTheme = (): void => {
+      host.textContent = this.src;
+      delete host.dataset.processed;
+      host.removeAttribute("data-processed");
+      host.classList.remove("mermaid-error");
+      requestAnimationFrame(paint);
+    };
+    window.addEventListener("mdc-theme-resolved", onTheme);
+    this.cleanup = (): void => window.removeEventListener("mdc-theme-resolved", onTheme);
+
+    wrap.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      view.dispatch({
+        selection: EditorSelection.cursor(this.from),
+        scrollIntoView: true,
+      });
+      view.focus();
+    });
+    return wrap;
+  }
+
+  destroy(): void {
+    this.cleanup?.();
+    this.cleanup = null;
+  }
+
+  ignoreEvent(): boolean {
+    return false;
+  }
+}
+
 /** Node types whose text is pure syntax — safe to hide when not being edited. */
 const CONCEALED_MARKS = new Set([
   "HeaderMark",
@@ -242,26 +320,52 @@ function buildDecorations(view: EditorView): DecorationSet {
   return Decoration.set([...lines, ...marks, ...deduped], true);
 }
 
+/** True when a selection or the caret is anywhere inside [from, to] — the signal
+ *  that the user is editing this block, so it keeps its raw source. */
+function editing(state: EditorState, from: number, to: number): boolean {
+  return state.selection.ranges.some((r) => r.to >= from && r.from <= to);
+}
+
 /**
- * Table rendering lives in a StateField, not the view plugin: CodeMirror
+ * Block rendering lives in a StateField, not the view plugin: CodeMirror
  * refuses block-level decorations from a plugin ("Block decorations may not be
  * specified via plugins") because they change block layout, which the viewport
  * measurement depends on. A field is computed for the whole document, so this
- * one walks the full tree rather than the visible ranges — tables are rare
- * enough that the cost is nil next to the inline pass.
+ * one walks the full tree rather than the visible ranges — tables and diagrams
+ * are rare enough that the cost is nil next to the inline pass.
  */
-function buildTableDecorations(state: EditorState): DecorationSet {
+function buildBlockDecorations(state: EditorState): DecorationSet {
   const out: Array<Range<Decoration>> = [];
   syntaxTree(state).iterate({
     enter: (node) => {
+      if (node.name === "FencedCode") {
+        const firstLine = state.doc.lineAt(node.from);
+        const lastLine = state.doc.lineAt(node.to);
+        if (editing(state, firstLine.from, lastLine.to)) return;
+        const info = firstLine.text.replace(/^\s*[`~]{3,}/, "").trim().toLowerCase();
+        if (info !== "mermaid") return;
+        // Drop the opening fence, and the closing one when there is one — an
+        // unclosed fence still renders whatever it has so far.
+        const raw = state.doc.sliceString(firstLine.from, lastLine.to).split("\n");
+        const closed = /^\s*[`~]{3,}\s*$/.test(raw[raw.length - 1] ?? "");
+        const src = raw.slice(1, closed ? -1 : undefined).join("\n");
+        if (src.trim() === "") return;
+        out.push({
+          from: firstLine.from,
+          to: lastLine.to,
+          value: Decoration.replace({
+            block: true,
+            widget: new MermaidWidget(src, firstLine.from),
+          }),
+        });
+        return;
+      }
       if (node.name !== "Table") return;
       const firstLine = state.doc.lineAt(node.from);
       const lastLine = state.doc.lineAt(node.to);
       // Caret inside the table means the user is editing it — leave the source
       // alone (livePreviewTheme keeps those lines monospace).
-      if (state.selection.ranges.some((r) => r.to >= firstLine.from && r.from <= lastLine.to)) {
-        return;
-      }
+      if (editing(state, firstLine.from, lastLine.to)) return;
       const raw = state.doc.sliceString(firstLine.from, lastLine.to).split("\n");
       const align =
         raw[1] && splitRow(raw[1]).every((c) => ALIGN_ROW.test(c)) ? alignments(raw[1]) : [];
@@ -283,11 +387,11 @@ function buildTableDecorations(state: EditorState): DecorationSet {
   return Decoration.set(out, true);
 }
 
-const tableField = StateField.define<DecorationSet>({
-  create: (state) => buildTableDecorations(state),
+const blockField = StateField.define<DecorationSet>({
+  create: (state) => buildBlockDecorations(state),
   update(value, tr) {
     if (!tr.docChanged && !tr.selection) return value;
-    return buildTableDecorations(tr.state);
+    return buildBlockDecorations(tr.state);
   },
   provide: (f) => EditorView.decorations.from(f),
 });
@@ -369,4 +473,4 @@ const livePreviewTheme = EditorView.theme({
   },
 });
 
-export const livePreviewExtension: Extension = [tableField, livePreviewPlugin, livePreviewTheme];
+export const livePreviewExtension: Extension = [blockField, livePreviewPlugin, livePreviewTheme];

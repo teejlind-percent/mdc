@@ -17,6 +17,9 @@
   --heading-font:
     "Hanken Grotesk Variable", "Hanken Grotesk", var(--doc-font);
   --mono-font: ui-monospace, "SF Mono", Menlo, monospace;
+  /* UI chrome — sidebar, toolbars, comment cards, dialogs. Same running face as
+     the document so the shell and its contents are one system. */
+  --ui-font: var(--doc-font);
 
   /* Percent neutrals — paper/ink from the design system, replacing the warm
      cream ramp. Cool near-white page, near-black ink. */
@@ -37,24 +40,38 @@
   --accent: #6661ed;
   --accent-border: #c3c1f6; /* indigo border (active code-wrap) */
   --accent-tint: #f0effd; /* indigo background (generic focus, active chips) */
-  /* Text selection, shared by the doc view and the editor — deliberately
-     stronger than --accent-tint (a hover-tint is too faint to read as selected). */
-  --selection: color-mix(in srgb, var(--accent) 24%, transparent);
+  /* Pop — the signature --percent-purple, spent deliberately and in ONE place:
+     the handoff control and its live-session state. The design system reserves
+     this hue as a sparing accent, so adding a second use dilutes the first.
+     If something else ever needs emphasis, take it from --accent, not here. */
+  --pop: #7140ff;
+  --pop-hover: #5f2ff0;
 
-  /* Danger — vivid red for destructive actions (delete). */
-  --danger: #c0392b;
-  --danger-hover: #a93226;
-  --danger-tint: #fdecea;
+  /* Text selection, shared by the doc view and the editor — deliberately
+     stronger than --accent-tint (a hover-tint is too faint to read as selected).
+     Percent: keyed to --comment (orange), not --accent, so selecting text reads
+     as "about to be commented on" — selection is the first half of that gesture
+     in a review tool. Comment anchors stay distinguishable by FORM, not hue:
+     an anchor is a 2px solid underline, a selection is a background wash. */
+  --selection: color-mix(in srgb, var(--comment) 24%, transparent);
+
+  /* Danger — vivid red for destructive actions (delete). Percent semantic-negative. */
+  --danger: #ff6161;
+  --danger-hover: #ed4747;
+  --danger-tint: #ffecec;
 
   /* Broken — muted red-brown for error/missing state (broken link/image,
      mermaid render error). Deliberately quieter than --danger. */
   --broken: #a0524d;
   --broken-border: rgba(160, 82, 77, 0.6);
 
-  /* Comment — the rust that marks anything comment-related, regardless of
-     author: text highlights, gutter dots, card flashes, comment-box focus,
-     dashboard badges, the panel dot. Authorship shows on cards, not by hue. */
-  --comment: #c05621;
+  /* Comment — Percent --accent-orange, marking anything comment-related
+     regardless of author: text highlights, gutter dots, card flashes,
+     comment-box focus, dashboard badges, the panel dot, and (via --selection)
+     the text selection that precedes a new comment. Authorship shows on cards,
+     not by hue. This is the most-seen accent in the product, which is why it is
+     a brand color and not the stock rust it replaced. */
+  --comment: #e7632f;
 
   /* Warning — amber for notice/pending state (handoff-busy, fm-badge, orphans). */
   --warning: #c79a3a;
@@ -64,10 +81,10 @@
   --warning-tint-2: #fff8e1;
   --warning-border: #ffd54f;
 
-  /* Success — green for a live/watching agent session (handoff). */
-  --success: #1f7a3a;
-  --success-dark: #196530;
-  --success-bright: #6ee29a;
+  /* Success — Percent semantic-positive, for a live/watching agent session. */
+  --success: #00ab8a;
+  --success-dark: #008d72;
+  --success-bright: #4fd8bd;
 
   /* Diff — teal marks proposed additions; violet marks current text that a
      suggestion removes. These stay distinct from live-state green and danger red. */
@@ -77,24 +94,28 @@
   --diff-del-tint: color-mix(in srgb, var(--diff-del) 18%, var(--surface));
 
   /* Status-idle — grey idle handoff dot. */
-  --status-idle: #b8b3ac;
+  --status-idle: #aaaaad; /* ink-200 */
 
-  /* Neutral backgrounds. */
-  --hover: #e0e0dc;
-  --bg-soft: #fafaf8;
-  --code-bg: #f2f2ef;
-  --code-bg-2: #e8e8e4;
-  --comment-tint: #faf0ea;
+  /* Neutral backgrounds. Percent: these were the last of the warm cream ramp —
+     the page neutrals moved to cool paper/ink, but these stayed beige and made
+     code chips and hover states read as a different, warmer system sitting on
+     top of the brand one. All five now come off the paper ramp. */
+  --hover: #ebebee; /* paper-400 */
+  --bg-soft: #fafafc; /* paper-50 */
+  --code-bg: #f1f1f3; /* paper-300 */
+  --code-bg-2: #ebebee; /* paper-400 */
+  --comment-tint: color-mix(in srgb, var(--comment) 8%, var(--surface));
 
   /* Scrim — the modal backdrop, one value behind every modal (settings,
      delete-confirm, command palette). Black-alpha in both themes. */
   --scrim: rgba(0, 0, 0, 0.35);
 
   /* Toast — a high-contrast chip, intentionally NOT --text/--surface (those
-     double-invert in dark). Light theme: a near-black chip with light text. */
-  --toast-bg: #2b2620;
-  --toast-text: #f3efe8;
-  --toast-text-dim: rgba(243, 239, 232, 0.65);
+     double-invert in dark). Light theme: a near-black chip with light text.
+     Percent: ink-1000 / paper-50 rather than the warm near-black it replaced. */
+  --toast-bg: #000b15; /* ink-1000 */
+  --toast-text: #fafafc; /* paper-50 */
+  --toast-text-dim: rgba(250, 250, 252, 0.65);
 
   /* Interactive wash — the hover/active overlay on rows, tabs, buttons. In light
      it DARKENS (black-alpha); the dark theme flips it to LIGHTEN (white-alpha), so
@@ -109,9 +130,10 @@
 }
 
 /* Dark theme — overrides the light :root tokens above when <html data-theme="dark">.
-   A warm-neutral dark ramp (kept in the same warm family as the light cream, not a
-   cold blue-grey), with each accent/status tint re-derived against the dark surface
-   rather than inverted. Light is never edited; it's the bare :root default. */
+   A neutral-cool ramp built down from ink-1000, matching the light side's cool
+   paper/ink rather than the warm cream this replaced, with each accent/status tint
+   re-derived against the dark surface rather than inverted. Light is never edited;
+   it's the bare :root default. */
 :root[data-theme="dark"] {
   /* Percent dark: a neutral-cool ramp built down from ink-1000, not the old
      warm cream inverted. */
@@ -128,16 +150,23 @@
   --accent: #9d9bf5;
   --accent-border: #4b48a8;
   --accent-tint: #1e1d2e;
-  --selection: color-mix(in srgb, var(--accent) 42%, transparent);
+  /* Keyed to --comment here too — see the light theme for why. */
+  --selection: color-mix(in srgb, var(--comment) 38%, transparent);
 
-  --danger: #e07a6e;
-  --danger-hover: #eb8b80;
-  --danger-tint: #3a2420;
+  /* Purple lifted off #7140ff, which is too dark to carry white text on a dark
+     surface. Still the one reserved pop. */
+  --pop: #9d7bff;
+  --pop-hover: #ae92ff;
+
+  --danger: #ff8080;
+  --danger-hover: #ff9494;
+  --danger-tint: #3a1f1f;
 
   --broken: #c98a82;
   --broken-border: rgba(201, 138, 130, 0.5);
 
-  --comment: #e08a4f;
+  /* accent-orange lifted for contrast against the dark surface. */
+  --comment: #f2814d;
 
   --warning: #d9b25e;
   --warning-text: #d9a94a;
@@ -146,28 +175,28 @@
   --warning-tint-2: #2b2615;
   --warning-border: #6b5727;
 
-  --success: #5cb87a;
-  --success-dark: #4a9c66;
+  --success: #3ec9ac;
+  --success-dark: #2ba98f;
   --success-bright: #6ee29a;
 
   --diff-add: #70c2c5;
   --diff-del: #c49bd3;
 
-  --status-idle: #5a554d;
+  --status-idle: #55555e;
 
-  --hover: #302c27;
-  --bg-soft: #1f1c18;
-  /* Code fills sit ABOVE the doc surface (#24211d), not below it — the chip
+  --hover: #26262b;
+  --bg-soft: #1c1c20;
+  /* Code fills sit ABOVE the doc surface (#17171a), not below it — the chip
      must lighten to separate, mirroring how light-theme chips darken. */
-  --code-bg: #322d26;
-  --code-bg-2: #403a31;
-  --comment-tint: #2e251f;
+  --code-bg: #26262b;
+  --code-bg-2: #33333a;
+  --comment-tint: color-mix(in srgb, var(--comment) 14%, var(--surface));
 
   /* Toast in dark: an elevated lighter chip (not near-black, which would blend
      into the dark bg) with light text, so it still reads as a floating element. */
-  --toast-bg: #3a352e;
-  --toast-text: #f3efe8;
-  --toast-text-dim: rgba(243, 239, 232, 0.6);
+  --toast-bg: #2a2a30;
+  --toast-text: #f1f1f3;
+  --toast-text-dim: rgba(241, 241, 243, 0.6);
 
   /* Interactive wash flips to LIGHTEN on dark (white-alpha), so hover/active
      states brighten the surface rather than darkening into the background. */
@@ -177,7 +206,7 @@
   /* Selected fill in dark: clearly brighter than a hover wash so the active row
      reads as selected against the dark sidebar (the translucent wash was too
      faint). A solid elevated step rather than a thin alpha. */
-  --selected: #353029;
+  --selected: #2f2f36;
 }
 
 html,
@@ -190,8 +219,10 @@ body {
 
 body {
   margin: 0;
-  font-family:
-    "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  /* Percent: the app chrome was still Plus Jakarta while the document had moved
+     to Source Sans / Hanken — so the shell and the thing it framed were two
+     different typefaces. --ui-font keeps chrome on the brand's running face. */
+  font-family: var(--ui-font);
   background: var(--bg);
   color: var(--text);
   font-size: 14px;

@@ -53,10 +53,13 @@
   }
 }
 
-/* Handoff button — a solid dark pill in the doc toolbar. */
+/* Handoff button — a solid purple pill in the doc toolbar. Percent: this is the
+   single sanctioned use of --pop (#7140ff). Handing off is the one irreversible-
+   feeling act in the review loop and the only control that has to be findable
+   without looking, so it gets the signature color and nothing else does. */
 .handoff-btn {
-  background: var(--text);
-  color: var(--surface);
+  background: var(--pop);
+  color: #ffffff;
   border: 0;
   padding: 6px 16px 6px 12px;
   border-radius: 999px;
@@ -76,7 +79,8 @@
     transform 0.08s;
 }
 .handoff-btn:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  background: var(--pop-hover);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--pop) 35%, transparent);
 }
 .handoff-btn:active {
   transform: scale(0.97);
