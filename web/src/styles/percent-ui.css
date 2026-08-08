@@ -1,0 +1,137 @@
+/* Percent fork additions — styles for percent-ui.ts (resizable comment margin
+   and the whole-document comment composer). The document-surface and gutter
+   rules that used to live here are now in layout.css / doc.css / tokens.css. */
+
+/* ---- document / comment-margin divider ----------------------------------- */
+
+.pct-grip {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  width: 9px;
+  z-index: 150;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.12s;
+  /* the visible hairline sits inside a fat invisible hit area */
+}
+
+.pct-grip::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 1px;
+  background: transparent;
+  transition: background 0.12s;
+}
+
+.pct-grip:hover::after,
+.pct-grip.pct-grip-active::after {
+  background: var(--accent, #2b6cb0);
+}
+
+.pct-grip:hover,
+.pct-grip.pct-grip-active {
+  background: color-mix(in srgb, var(--accent, #2b6cb0) 10%, transparent);
+}
+
+/* while dragging, kill text selection and cursor flicker everywhere */
+body.pct-resizing,
+body.pct-resizing * {
+  user-select: none !important;
+  cursor: col-resize !important;
+}
+
+/* mdc animates grid-template-columns over 0.15s, which reads as lag mid-drag */
+body.pct-resizing .layout {
+  transition: none !important;
+}
+
+/* ---- doc-level comment composer ------------------------------------------ */
+/* Docked at the foot of the comment margin, chat-style: type, Enter, done.
+   Fixed rather than sticky so it holds the bottom of the pane no matter how
+   the (window-scrolled) sidebar column is positioned. */
+
+.pct-composer {
+  position: fixed;
+  bottom: 0;
+  z-index: 140;
+  box-sizing: border-box;
+  padding: 10px 12px 12px;
+  background: var(--bg, #f7f4ef);
+  border-top: 1px solid var(--border, #e4ded4);
+}
+
+.pct-composer-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 34px;
+  max-height: 160px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text, #1d1a15);
+  background: var(--surface, #fff);
+  border: 1px solid var(--border-mid, #d1c9bc);
+  border-radius: 8px;
+  resize: none;
+  overflow-y: auto;
+}
+
+.pct-composer-input::placeholder {
+  color: var(--text-faint, #a49c8e);
+}
+
+.pct-composer-input:focus {
+  outline: none;
+  border-color: var(--accent, #2b6cb0);
+}
+
+/* Hidden until the composer is in use — see the note in percent-mdc-ui.js:
+   this bar overlays a scrolling column, so its height is dead space over the
+   Accept / Reject / Reply controls at the foot of a tall thread. */
+.pct-composer-row {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 7px;
+}
+
+.pct-composer-active .pct-composer-row {
+  display: flex;
+}
+
+.pct-composer-hint {
+  font-size: 11px;
+  color: var(--text-faint, #a49c8e);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pct-composer-hint.pct-composer-error {
+  color: #b4443a;
+}
+
+.pct-composer-send {
+  flex: none;
+  padding: 5px 12px;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.3;
+  color: #fff;
+  background: var(--text, #1d1a15);
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: opacity 0.12s;
+}
+
+.pct-composer-send:disabled {
+  opacity: 0.35;
+  cursor: default;
+}

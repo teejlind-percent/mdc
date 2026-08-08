@@ -1,7 +1,7 @@
 {
   "name": "mdc-workspace",
   "version": "0.8.0",
-  "description": "A local markdown workspace where humans and coding agents review docs together — margin comments and agent-suggested edits anchored to the text, stored beside each file; the doc changes only when you accept. Renders markdown, images, HTML, and PDF; trusted HTML files run as mini apps.",
+  "description": "A local markdown workspace where humans and coding agents review docs together \u2014 margin comments and agent-suggested edits anchored to the text, stored beside each file; the doc changes only when you accept. Renders markdown, images, HTML, and PDF; trusted HTML files run as mini apps.",
   "type": "module",
   "author": "Yang-Cheng Chen",
   "license": "MIT",
@@ -36,7 +36,8 @@
     "build:web:dev": "vite build --config web/vite.config.ts web --outDir dist-dev",
     "ship": "scripts/ship.sh",
     "typecheck:web": "tsc --noEmit -p web/tsconfig.json",
-    "knip": "knip"
+    "knip": "knip",
+    "prepare": "npm run build"
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.3",

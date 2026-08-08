@@ -4,7 +4,9 @@
 
 .doc {
   background: var(--surface);
-  padding: 24px 64px 56px;
+  /* Percent: --pct-doc-pad is set from the measured column width by
+     percent-ui.ts; 64px is most of the column once the pane is narrow. */
+  padding: 24px var(--pct-doc-pad, 64px) 56px;
   line-height: 1.65;
   font-size: 16px;
   position: relative;
@@ -222,7 +224,9 @@
      inside the bordered shell, giving a short doc a 1px phantom scroll in edit
      mode. (dvh tracks the dynamic viewport; the 45px = 44px toolbar + 1px border.) */
   min-height: calc(100dvh - 45px);
-  padding: 24px 64px 56px;
+  /* Percent: --pct-doc-pad is set from the measured column width by
+     percent-ui.ts; 64px is most of the column once the pane is narrow. */
+  padding: 24px var(--pct-doc-pad, 64px) 56px;
   caret-color: var(--text);
   tab-size: 4;
 }

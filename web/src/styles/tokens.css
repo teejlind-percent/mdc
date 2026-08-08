@@ -1,7 +1,9 @@
 /* Design tokens — the canonical palette + dimensions for the whole UI. */
 :root {
-  --sidebar-w: 380px;
-  --nav-w: 280px;
+  /* Percent: 380/280 leaves ~300px of document in a side-by-side editor
+     pane. The comment margin is also drag-resizable (see percent-ui.ts). */
+  --sidebar-w: 300px;
+  --nav-w: 200px;
   --bg: #f7f4ef;
   --nav-bg: #edeae3;
   --surface: #ffffff;

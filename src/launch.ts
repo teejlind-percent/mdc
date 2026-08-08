@@ -18,6 +18,8 @@ export interface LaunchEnv {
   platform?: NodeJS.Platform;
   spawnFn?: typeof spawn;
   spawnSyncFn?: typeof spawnSync;
+  /** Suppress every browser launch; defaults to `MDC_NO_BROWSER=1`. */
+  noBrowser?: boolean;
 }
 
 /**
@@ -67,6 +69,16 @@ export async function openWorkspaceWindow(
   appWindow: boolean,
   env: LaunchEnv = {},
 ): Promise<void> {
+  // MDC_NO_BROWSER=1 — the workspace is being viewed in an embedded browser
+  // (a Claude Code / editor preview pane) that the caller drives itself, so
+  // launching a system browser puts the review in the wrong window. Every
+  // launch path reaches this function, including `mdc open`'s fallback when no
+  // client is attached to the port, which `serve --no-open` does not cover.
+  const noBrowser = env.noBrowser ?? process.env.MDC_NO_BROWSER === "1";
+  if (noBrowser) {
+    console.log(`mdc: not launching a browser (MDC_NO_BROWSER=1) — open ${url}`);
+    return;
+  }
   const platform = env.platform ?? process.platform;
   const spawnSyncFn = env.spawnSyncFn ?? spawnSync;
   if (appWindow && platform === "darwin") {

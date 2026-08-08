@@ -33,9 +33,21 @@ function fakeSpawnSync(status: number) {
 const URL = "http://localhost:8000";
 
 describe("openWorkspaceWindow", () => {
+  it("launches nothing when noBrowser is set", async () => {
+    const calls: string[][] = [];
+    await openWorkspaceWindow(URL, true, {
+      noBrowser: true,
+      platform: "darwin",
+      spawnFn: fakeSpawn(calls),
+      spawnSyncFn: fakeSpawnSync(0),
+    });
+    expect(calls).toEqual([]);
+  });
+
   it("launches a Chrome app window when opted in and Chrome is installed", async () => {
     const calls: string[][] = [];
     await openWorkspaceWindow(URL, true, {
+      noBrowser: false,
       platform: "darwin",
       spawnFn: fakeSpawn(calls),
       spawnSyncFn: fakeSpawnSync(0),
@@ -46,6 +58,7 @@ describe("openWorkspaceWindow", () => {
   it("falls back to the default browser when Chrome is not installed", async () => {
     const calls: string[][] = [];
     await openWorkspaceWindow(URL, true, {
+      noBrowser: false,
       platform: "darwin",
       spawnFn: fakeSpawn(calls),
       spawnSyncFn: fakeSpawnSync(1),
@@ -56,6 +69,7 @@ describe("openWorkspaceWindow", () => {
   it("ignores the opt-in off macOS", async () => {
     const calls: string[][] = [];
     await openWorkspaceWindow(URL, true, {
+      noBrowser: false,
       platform: "linux",
       spawnFn: fakeSpawn(calls),
       spawnSyncFn: fakeSpawnSync(0),
@@ -66,6 +80,7 @@ describe("openWorkspaceWindow", () => {
   it("opens a plain browser tab when not opted in", async () => {
     const calls: string[][] = [];
     await openWorkspaceWindow(URL, false, {
+      noBrowser: false,
       platform: "darwin",
       spawnFn: fakeSpawn(calls),
       spawnSyncFn: fakeSpawnSync(0),
@@ -76,6 +91,7 @@ describe("openWorkspaceWindow", () => {
   it("falls back to the default browser when the app-window launch fails", async () => {
     const calls: string[][] = [];
     await openWorkspaceWindow(URL, true, {
+      noBrowser: false,
       platform: "darwin",
       // The app-window `open -na` attempt fails; the plain fallback succeeds.
       spawnFn: fakeSpawn(calls, (args) => (args.includes("-na") ? 1 : 0)),

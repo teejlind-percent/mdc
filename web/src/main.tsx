@@ -2,11 +2,13 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App.js";
 import { applyStoredTheme, startSystemThemeWatcher } from "./theme.js";
+import { startPercentUi } from "./percent-ui.js";
 import "@fontsource-variable/plus-jakarta-sans";
 import "highlight.js/styles/github.css";
 import "./styles/hljs-dark.css";
 import "./styles/tokens.css";
 import "./styles/layout.css";
+import "./styles/percent-ui.css";
 import "./styles/chrome.css";
 import "./styles/doc.css";
 import "./styles/frontmatter.css";
@@ -30,3 +32,8 @@ createRoot(root).render(
     <App />
   </StrictMode>,
 );
+
+// Percent fork: resizable comment margin + whole-document comment composer.
+// Works on the rendered DOM and waits for the layout to mount, so it is safe to
+// start before React has painted.
+startPercentUi();
