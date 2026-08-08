@@ -442,12 +442,19 @@ export function App() {
   }, [root]);
 
   // A natural-language prompt matching the agent's activation rule (see
-  // docs/agent-setup.md) — mode-neutral: it doesn't presume comments exist, so
-  // it covers both "answer my comments" and "review my draft". The agent arms
-  // watch, checks pending, and asks if ambiguous. Absolute path, matching the
-  // Workspace section's convention (an agent's cwd may differ from the root).
+  // docs/agent-setup.md). Absolute path, matching the Workspace section's
+  // convention (an agent's cwd may differ from the root).
+  //
+  // This used to read "Review <path> in mdc", chosen to be mode-neutral. In
+  // practice agents read "review" as an instruction to PRODUCE one and open by
+  // writing their own notes — burying the threads the user is waiting on, which
+  // is the opposite of why the button was pressed. The button means "I left you
+  // something," so the prompt now says that and names the command that finds it.
   const reviewPrompt = useCallback(
-    () => `Review ${absolutePath(root, activeFile ?? "")} in mdc`,
+    () =>
+      `Pick up my edits and comments on ${absolutePath(root, activeFile ?? "")} in mdc — ` +
+      `run mdc list-pending on it first and reply in the margin. ` +
+      `Don't add review notes of your own unless I ask for them.`,
     [root, activeFile],
   );
 

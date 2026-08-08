@@ -53,6 +53,7 @@ import {
   walkFiles,
 } from "./walk.js";
 import { HandoffRegistry } from "./handoff-state.js";
+import { diffEdits, hunkBody, MAX_CAPTURED_HUNKS } from "../edit-capture.js";
 import { parseManifest, ManifestError, type AppManifest } from "../apps/manifest.js";
 import { canRead, canWrite, fileVersion } from "../apps/scope.js";
 import { isTrusted, trustApp } from "../apps/trust.js";
@@ -308,20 +309,21 @@ export function createApp(cfg: ServerConfig): {
   // as the read route, so it can never write outside the served root.
   app.put("/api/md", async (c) => {
     const file = requireQuery(c, "file");
-    const { mdPath } = resolveFile(cfg.root, state.index, file);
+    const { mdPath, scPath } = resolveFile(cfg.root, state.index, file);
     const b = await c.req.json<{ content?: string; baseVersion?: string }>();
     if (typeof b.content !== "string") throw new HttpError(400, "content required");
+    // Kept for edit capture below — read before the write, not after.
+    let previous: string | null;
+    try {
+      previous = readFileSync(mdPath, "utf8");
+    } catch {
+      previous = null;
+    }
     // With a baseVersion, a write against a file that changed since that read
     // is a conflict — never a silent clobber. Omitting baseVersion is a blind
     // write (kept for writers that don't track versions).
     if (b.baseVersion !== undefined) {
-      let current: string | null;
-      try {
-        current = readFileSync(mdPath, "utf8");
-      } catch {
-        current = null;
-      }
-      if (current === null || fileVersion(current) !== b.baseVersion) {
+      if (previous === null || fileVersion(previous) !== b.baseVersion) {
         throw new HttpError(409, `${file} changed underneath you — reload`);
       }
     }
@@ -329,6 +331,41 @@ export function createApp(cfg: ServerConfig): {
       writeFileSync(mdPath, b.content, "utf8");
     } catch {
       throw new HttpError(500, `failed to write: ${file}`);
+    }
+    // Edit capture: a save through this endpoint is a person editing in the
+    // browser (agents write through the CLI and the filesystem), so record what
+    // they changed as threads they authored. The write above already happened
+    // and is untouched by this — the threads are a notification, not a gate.
+    // MDC_NO_EDIT_CAPTURE=1 turns it off.
+    if (previous !== null && process.env.MDC_NO_EDIT_CAPTURE !== "1") {
+      try {
+        const hunks = diffEdits(previous, b.content);
+        const write = (body: string, quote: string): void => {
+          appendEntry(scPath, {
+            id: newId(),
+            file: basename(mdPath),
+            anchor: { quote },
+            parent_id: null,
+            author: cfg.user,
+            body,
+            timestamp: nowIso(),
+          });
+        };
+        if (hunks.length > MAX_CAPTURED_HUNKS) {
+          const first = hunks[0]!;
+          write(
+            `✏️ ${cfg.user} rewrote this document while reviewing — ${hunks.length} separate ` +
+              `changes, too many to thread individually. Diff it against your copy rather than ` +
+              `reading them one by one.`,
+            first.quote,
+          );
+        } else {
+          for (const h of hunks) write(hunkBody(h, cfg.user), h.quote);
+        }
+      } catch {
+        // Capture is best-effort: never fail a save because the diff or the
+        // sidecar append went wrong. The edit itself is already on disk.
+      }
     }
     return c.json({ ok: true, path: file, version: fileVersion(b.content) });
   });
