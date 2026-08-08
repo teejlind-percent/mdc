@@ -8,12 +8,12 @@ import { HighlightStyle, syntaxHighlighting, type TagStyle } from "@codemirror/l
 import { tags } from "@lezer/highlight";
 
 export const markdownHighlightSpecs = [
-  { tag: tags.heading1, color: "var(--text)", fontWeight: "700", fontSize: "1.4em" },
-  { tag: tags.heading2, color: "var(--text)", fontWeight: "700", fontSize: "1.3em" },
-  { tag: tags.heading3, color: "var(--text)", fontWeight: "700", fontSize: "1.2em" },
-  { tag: tags.heading4, color: "var(--text)", fontWeight: "700", fontSize: "1.1em" },
-  { tag: tags.heading5, color: "var(--text)", fontWeight: "700", fontSize: "1.05em" },
-  { tag: tags.heading6, color: "var(--text)", fontWeight: "700", fontSize: "1em" },
+  { tag: tags.heading1, color: "var(--text)", fontFamily: "var(--heading-font)", fontWeight: "700", fontSize: "1.4em" },
+  { tag: tags.heading2, color: "var(--text)", fontFamily: "var(--heading-font)", fontWeight: "700", fontSize: "1.3em" },
+  { tag: tags.heading3, color: "var(--text)", fontFamily: "var(--heading-font)", fontWeight: "700", fontSize: "1.2em" },
+  { tag: tags.heading4, color: "var(--text)", fontFamily: "var(--heading-font)", fontWeight: "700", fontSize: "1.1em" },
+  { tag: tags.heading5, color: "var(--text)", fontFamily: "var(--heading-font)", fontWeight: "700", fontSize: "1.05em" },
+  { tag: tags.heading6, color: "var(--text)", fontFamily: "var(--heading-font)", fontWeight: "700", fontSize: "1em" },
   { tag: tags.strong, fontWeight: "700" },
   { tag: tags.emphasis, fontStyle: "italic" },
   // Code = full-strength text, NO background. Code is content you read, not

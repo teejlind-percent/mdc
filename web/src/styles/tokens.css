@@ -7,23 +7,36 @@
   /* Percent: edit mode renders markdown as you type, so its prose face should
      match the rendered view rather than the source-code face it used to use.
      Code inside it stays monospace — see livePreview.ts. */
+  /* Percent brand type: Source Sans 3 for running text, Hanken Grotesk for
+     headings. Neuzeit Grotesk is the canonical display face but is licensed
+     commercial and cannot ship in a public repo — Hanken is the system's own
+     documented fallback for it. */
   --doc-font:
-    "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    "Source Sans 3 Variable", "Source Sans 3", -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  --heading-font:
+    "Hanken Grotesk Variable", "Hanken Grotesk", var(--doc-font);
   --mono-font: ui-monospace, "SF Mono", Menlo, monospace;
-  --bg: #f7f4ef;
-  --nav-bg: #edeae3;
-  --surface: #ffffff;
-  --border: #e4ded4;
-  --border-mid: #d1c9bc;
-  --text: #1d1a15;
-  --text-muted: #6b6356;
-  --text-faint: #a49c8e;
+
+  /* Percent neutrals — paper/ink from the design system, replacing the warm
+     cream ramp. Cool near-white page, near-black ink. */
+  --bg: #f8f8f9;        /* paper-200 */
+  --nav-bg: #f1f1f3;    /* paper-300 */
+  --surface: #ffffff;   /* paper-0 */
+  --border: #e5e5e5;    /* line-200 */
+  --border-mid: #d9d9dc; /* line-300 */
+  --text: #0e0e10;      /* ink-900 */
+  --text-muted: #757579; /* ink-500 */
+  --text-faint: #999999; /* ink-300 */
 
   /* Accent — the interactive/system blue: links and wikilinks, text selection,
      generic focus, active system chips (code-wrap toggle, Trusted App pill). */
-  --accent: #2b6cb0;
-  --accent-border: #aabde8; /* light blue border (active code-wrap) */
-  --accent-tint: #edf1fb; /* light blue background (generic focus, active chips) */
+  /* Percent indigo — the design system's button/CTA fill. The signature
+     --percent-purple (#7140FF) is reserved as a sparing "pop" and is NOT used
+     as a general UI accent, per the system's own rule. */
+  --accent: #6661ed;
+  --accent-border: #c3c1f6; /* indigo border (active code-wrap) */
+  --accent-tint: #f0effd; /* indigo background (generic focus, active chips) */
   /* Text selection, shared by the doc view and the editor — deliberately
      stronger than --accent-tint (a hover-tint is too faint to read as selected). */
   --selection: color-mix(in srgb, var(--accent) 24%, transparent);
@@ -100,18 +113,21 @@
    cold blue-grey), with each accent/status tint re-derived against the dark surface
    rather than inverted. Light is never edited; it's the bare :root default. */
 :root[data-theme="dark"] {
-  --bg: #1a1815;
-  --nav-bg: #211e1a;
-  --surface: #24211d;
-  --border: #36322c;
-  --border-mid: #46413a;
-  --text: #ece8e1;
-  --text-muted: #a39c8f;
-  --text-faint: #6f685c;
+  /* Percent dark: a neutral-cool ramp built down from ink-1000, not the old
+     warm cream inverted. */
+  --bg: #0e0e10;
+  --nav-bg: #131316;
+  --surface: #17171a;
+  --border: #2a2a2f;
+  --border-mid: #3a3a41;
+  --text: #f1f1f3;
+  --text-muted: #a0a0a8;
+  --text-faint: #6e6e77;
 
-  --accent: #6fa8dc;
-  --accent-border: #3a5a82;
-  --accent-tint: #232a35;
+  /* Indigo lifted for contrast against the dark surface. */
+  --accent: #9d9bf5;
+  --accent-border: #4b48a8;
+  --accent-tint: #1e1d2e;
   --selection: color-mix(in srgb, var(--accent) 42%, transparent);
 
   --danger: #e07a6e;

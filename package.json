@@ -1,7 +1,7 @@
 {
   "name": "mdc-workspace",
   "version": "0.8.0",
-  "description": "A local markdown workspace where humans and coding agents review docs together \u2014 margin comments and agent-suggested edits anchored to the text, stored beside each file; the doc changes only when you accept. Renders markdown, images, HTML, and PDF; trusted HTML files run as mini apps.",
+  "description": "A local markdown workspace where humans and coding agents review docs together — margin comments and agent-suggested edits anchored to the text, stored beside each file; the doc changes only when you accept. Renders markdown, images, HTML, and PDF; trusted HTML files run as mini apps.",
   "type": "module",
   "author": "Yang-Cheng Chen",
   "license": "MIT",
@@ -46,7 +46,9 @@
     "@codemirror/state": "^6.6.0",
     "@codemirror/view": "^6.43.1",
     "@excalidraw/excalidraw": "^0.18.1",
+    "@fontsource-variable/hanken-grotesk": "^5.3.0",
     "@fontsource-variable/plus-jakarta-sans": "^5.2.8",
+    "@fontsource-variable/source-sans-3": "^5.3.0",
     "@hono/node-server": "^2.0.4",
     "@lezer/highlight": "^1.2.3",
     "@lezer/markdown": "^1.6.4",

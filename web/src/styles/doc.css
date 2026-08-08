@@ -4,6 +4,7 @@
 
 .doc {
   background: var(--surface);
+  font-family: var(--doc-font);
   /* Percent: --pct-doc-pad is set from the measured column width by
      percent-ui.ts; 64px is most of the column once the pane is narrow. */
   padding: 24px var(--pct-doc-pad, 64px) 56px;
@@ -422,4 +423,16 @@
 }
 .editor-status.editor-error {
   color: var(--danger);
+}
+
+/* Percent brand: headings in Hanken Grotesk, the design system's editorial
+   voice. Body stays Source Sans 3 via --doc-font. */
+.doc h1,
+.doc h2,
+.doc h3,
+.doc h4,
+.doc h5,
+.doc h6 {
+  font-family: var(--heading-font);
+  letter-spacing: -0.01em;
 }

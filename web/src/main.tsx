@@ -3,7 +3,11 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App.js";
 import { applyStoredTheme, startSystemThemeWatcher } from "./theme.js";
 import { startPercentUi } from "./percent-ui.js";
-import "@fontsource-variable/plus-jakarta-sans";
+// Percent brand faces. Neuzeit Grotesk — the canonical display family — is a
+// licensed commercial face and is deliberately absent: this repo is public.
+// Hanken Grotesk and Source Sans 3 are OFL, so they self-host safely here.
+import "@fontsource-variable/hanken-grotesk";
+import "@fontsource-variable/source-sans-3";
 import "highlight.js/styles/github.css";
 import "./styles/hljs-dark.css";
 import "./styles/tokens.css";
