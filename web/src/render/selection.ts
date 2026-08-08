@@ -26,7 +26,22 @@ export function removeSelectionToolbar(): void {
 export function showSelectionToolbar(range: Range, onComment: (range: Range) => void): void {
   removeSelectionToolbar();
   const rects = range.getClientRects();
-  const endRect = rects.length > 0 ? rects[rects.length - 1]! : range.getBoundingClientRect();
+  const viewportH = document.documentElement.clientHeight;
+
+  // Anchor on the last rect that is actually on screen, not simply the last
+  // one. getClientRects() is in document order, so for a selection taller than
+  // the viewport — or one made by dragging upwards — the final rect can sit far
+  // below the fold, and a toolbar placed against it is invisible.
+  const visible = Array.prototype.filter.call(
+    rects,
+    (r: DOMRect) => r.bottom > 0 && r.top < viewportH,
+  ) as DOMRect[];
+  const endRect =
+    visible.length > 0
+      ? visible[visible.length - 1]!
+      : rects.length > 0
+        ? rects[rects.length - 1]!
+        : range.getBoundingClientRect();
 
   const tb = document.createElement("div");
   tb.className = "sel-toolbar";
@@ -36,17 +51,18 @@ export function showSelectionToolbar(range: Range, onComment: (range: Range) => 
     `<circle cx="12" cy="12" r="10"/><path d="M12 8v8"/><path d="M8 12h8"/></svg> Comment</button>`;
   document.body.appendChild(tb);
 
+  // .sel-toolbar is position:fixed, so these are viewport coordinates.
   const tbRect = tb.getBoundingClientRect();
-  const pageX = Math.max(
+  const left = Math.max(
     8,
-    Math.min(
-      endRect.right + window.scrollX - tbRect.width / 2,
-      window.innerWidth - tbRect.width - 8,
-    ),
+    Math.min(endRect.right - tbRect.width / 2, window.innerWidth - tbRect.width - 8),
   );
-  const pageY = endRect.bottom + window.scrollY + 6;
-  tb.style.left = `${pageX}px`;
-  tb.style.top = `${Math.max(8, pageY)}px`;
+  // Below the selection by default; above it when there is no room below.
+  let top = endRect.bottom + 6;
+  if (top + tbRect.height > viewportH - 8) top = endRect.top - tbRect.height - 6;
+  top = Math.max(8, Math.min(top, Math.max(8, viewportH - tbRect.height - 8)));
+  tb.style.left = `${left}px`;
+  tb.style.top = `${top}px`;
 
   const range0 = range.cloneRange();
   tb.querySelector("button")!.addEventListener("mousedown", (e) => {

@@ -51,7 +51,9 @@
 /* A high-contrast floating chip — uses the --toast-* tokens (NOT --text/--surface,
    which double-invert in dark and flip it to light-on-light). */
 .sel-toolbar {
-  position: absolute;
+  /* fixed, not absolute: showSelectionToolbar() places it in viewport
+     coordinates so it stays visible for selections taller than the viewport */
+  position: fixed;
   background: var(--toast-bg);
   color: var(--toast-text);
   border-radius: 6px;
