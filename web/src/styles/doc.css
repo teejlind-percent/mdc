@@ -197,10 +197,15 @@
   color: var(--broken);
 }
 
-/* Narrower viewports: tighten the doc padding. */
+/* Narrower viewports: tighten the doc padding.
+   Percent: the horizontal value stays on --pct-doc-pad. Viewport width is a
+   poor proxy for the document's own width in a three-column layout — a wide
+   window with both side columns open can leave a narrower column than a
+   narrow window with them closed — and percent-ui sets the variable from the
+   measured column. 32px remains the fallback if it is ever unset. */
 @media (max-width: 960px) {
   .doc {
-    padding: 40px 32px;
+    padding: 40px var(--pct-doc-pad, 32px);
   }
 }
 
