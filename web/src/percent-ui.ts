@@ -29,11 +29,17 @@ const MIN_DOC = 240;
 
 /* ------------------------------------------------------------------ widths */
 
-function navWidth(): number {
-  const raw = getComputedStyle(document.documentElement).getPropertyValue("--nav-w");
-  const n = parseFloat(raw);
-  return Number.isFinite(n) ? n : 200;
-}
+const NAV_W = 200;
+const MIN_NAV = 140;
+
+/**
+ * The file list is fixed rather than draggable, but it cannot be fixed in *px*:
+ * at 200 it plus the comment margin leave the document unusable once the pane
+ * is narrow (at 532px total the document gets 132px). So it holds 200 wherever
+ * there is room and gives ground proportionally below that.
+ */
+const navFor = (total: number): number =>
+  Math.round(Math.min(NAV_W, Math.max(MIN_NAV, total * 0.22)));
 
 function readStored(): number | null {
   const raw = Number(localStorage.getItem(SIDE_KEY));
@@ -45,7 +51,7 @@ const defaultSide = (total: number): number =>
   Math.round(Math.min(340, Math.max(MIN_SIDE, total * 0.3)));
 
 function clampSide(side: number, total: number): number {
-  const ceiling = Math.max(MIN_SIDE, total - navWidth() - MIN_DOC);
+  const ceiling = Math.max(MIN_SIDE, total - navFor(total) - MIN_DOC);
   return Math.round(Math.min(MAX_SIDE, Math.max(MIN_SIDE, Math.min(side, ceiling))));
 }
 
@@ -61,13 +67,13 @@ const layoutEl = (): HTMLElement | null => document.querySelector<HTMLElement>("
  * a ResizeObserver fires to tell us to restore it.
  */
 let styleEl: HTMLStyleElement | null = null;
-function writeVars(side: number): void {
+function writeVars(nav: number, side: number): void {
   if (!styleEl || !styleEl.isConnected) {
     styleEl = document.createElement("style");
     styleEl.id = "pct-mdc-vars";
     document.head.appendChild(styleEl);
   }
-  const css = `.layout{--sidebar-w:${side}px}`;
+  const css = `.layout{--nav-w:${nav}px;--sidebar-w:${side}px}`;
   if (styleEl.textContent !== css) styleEl.textContent = css;
 }
 
@@ -77,7 +83,7 @@ function applyWidths(): void {
   const total = Math.round(el.getBoundingClientRect().width);
   if (!total) return;
   state.side = clampSide(state.pinned ? state.side : defaultSide(total), total);
-  writeVars(state.side);
+  writeVars(navFor(total), state.side);
   positionGrip();
 }
 
@@ -146,7 +152,7 @@ function makeGrip(): HTMLElement {
     // dragging the divider right narrows the comment margin
     state.side = clampSide(startVal - (e.clientX - startX), total);
     state.pinned = true;
-    writeVars(state.side);
+    writeVars(navFor(total), state.side);
     positionGrip();
     syncDocPadding();
     positionComposer();
