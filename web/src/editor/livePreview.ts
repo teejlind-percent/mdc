@@ -19,8 +19,132 @@
  */
 
 import { syntaxTree } from "@codemirror/language";
-import { type Extension, type Range } from "@codemirror/state";
-import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate } from "@codemirror/view";
+import {
+  EditorSelection,
+  type EditorState,
+  type Extension,
+  type Range,
+  StateField,
+} from "@codemirror/state";
+import {
+  Decoration,
+  type DecorationSet,
+  EditorView,
+  ViewPlugin,
+  type ViewUpdate,
+  WidgetType,
+} from "@codemirror/view";
+
+/** Split a GFM table row on unescaped pipes, dropping the leading/trailing ones. */
+function splitRow(line: string): string[] {
+  const cells: string[] = [];
+  let cur = "";
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]!;
+    if (ch === "\\" && line[i + 1] === "|") {
+      cur += "|";
+      i++;
+    } else if (ch === "|") {
+      cells.push(cur);
+      cur = "";
+    } else {
+      cur += ch;
+    }
+  }
+  cells.push(cur);
+  if (cells.length && cells[0]!.trim() === "") cells.shift();
+  if (cells.length && cells[cells.length - 1]!.trim() === "") cells.pop();
+  return cells.map((c) => c.trim());
+}
+
+const ALIGN_ROW = /^\s*:?-{1,}:?\s*$/;
+
+/** Column alignments from the `|---|:--:|` delimiter row. */
+function alignments(line: string): Array<"left" | "center" | "right"> {
+  return splitRow(line).map((c) => {
+    const left = c.startsWith(":");
+    const right = c.endsWith(":");
+    return left && right ? "center" : right ? "right" : "left";
+  });
+}
+
+/**
+ * A real <table> standing in for the markdown source, the way Bear and Typora
+ * show one. Replaced back with the source as soon as the caret enters the
+ * table, so it stays editable text rather than a widget you have to escape.
+ *
+ * Cell contents render as plain text on purpose: running them through a
+ * markdown renderer here would mean a second, divergent rendering path for
+ * something the view mode already does properly, and inline HTML inside an
+ * editor widget is a reliable way to end up with unescaped input on screen.
+ */
+class TableWidget extends WidgetType {
+  constructor(
+    private readonly rows: string[][],
+    private readonly align: Array<"left" | "center" | "right">,
+    private readonly from: number,
+  ) {
+    super();
+  }
+
+  eq(other: TableWidget): boolean {
+    return (
+      this.from === other.from &&
+      JSON.stringify(this.rows) === JSON.stringify(other.rows) &&
+      JSON.stringify(this.align) === JSON.stringify(other.align)
+    );
+  }
+
+  toDOM(view: EditorView): HTMLElement {
+    const wrap = document.createElement("div");
+    wrap.className = "cm-md-table-render";
+    const table = document.createElement("table");
+    const [head, ...body] = this.rows;
+
+    if (head) {
+      const thead = document.createElement("thead");
+      const tr = document.createElement("tr");
+      head.forEach((cell, i) => {
+        const th = document.createElement("th");
+        th.textContent = cell;
+        th.style.textAlign = this.align[i] ?? "left";
+        tr.appendChild(th);
+      });
+      thead.appendChild(tr);
+      table.appendChild(thead);
+    }
+
+    const tbody = document.createElement("tbody");
+    for (const row of body) {
+      const tr = document.createElement("tr");
+      row.forEach((cell, i) => {
+        const td = document.createElement("td");
+        td.textContent = cell;
+        td.style.textAlign = this.align[i] ?? "left";
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    }
+    table.appendChild(tbody);
+    wrap.appendChild(table);
+
+    // Clicking the rendered table puts the caret in its source, which both
+    // reveals the markdown and dismisses this widget.
+    wrap.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      view.dispatch({
+        selection: EditorSelection.cursor(this.from),
+        scrollIntoView: true,
+      });
+      view.focus();
+    });
+    return wrap;
+  }
+
+  ignoreEvent(): boolean {
+    return false;
+  }
+}
 
 /** Node types whose text is pure syntax — safe to hide when not being edited. */
 const CONCEALED_MARKS = new Set([
@@ -62,7 +186,7 @@ function buildDecorations(view: EditorView): DecorationSet {
   // concealed backticks fought, and the mark lost.
   const marks: Array<Range<Decoration>> = [];
   const replaces: Array<Range<Decoration>> = [];
-  const lines: Array<Range<Decoration>> = [];
+  const lines: Array<Range<Decoration>> = tableSourceLines(view);
 
   for (const { from, to } of view.visibleRanges) {
     syntaxTree(view.state).iterate({
@@ -75,17 +199,6 @@ function buildDecorations(view: EditorView): DecorationSet {
         // it is the only signal left once the backticks are concealed.
         if (node.name === "InlineCode" || node.name === "FencedCode" || node.name === "CodeBlock") {
           marks.push({ from: node.from, to: node.to, value: codeMark });
-          return;
-        }
-
-        // Whole-table monospace, applied per line so column alignment survives.
-        if (node.name === "Table") {
-          const first = view.state.doc.lineAt(node.from).number;
-          const last = view.state.doc.lineAt(node.to).number;
-          for (let n = first; n <= last; n++) {
-            const line = view.state.doc.line(n);
-            lines.push({ from: line.from, to: line.from, value: tableLine });
-          }
           return;
         }
 
@@ -129,6 +242,77 @@ function buildDecorations(view: EditorView): DecorationSet {
   return Decoration.set([...lines, ...marks, ...deduped], true);
 }
 
+/**
+ * Table rendering lives in a StateField, not the view plugin: CodeMirror
+ * refuses block-level decorations from a plugin ("Block decorations may not be
+ * specified via plugins") because they change block layout, which the viewport
+ * measurement depends on. A field is computed for the whole document, so this
+ * one walks the full tree rather than the visible ranges — tables are rare
+ * enough that the cost is nil next to the inline pass.
+ */
+function buildTableDecorations(state: EditorState): DecorationSet {
+  const out: Array<Range<Decoration>> = [];
+  syntaxTree(state).iterate({
+    enter: (node) => {
+      if (node.name !== "Table") return;
+      const firstLine = state.doc.lineAt(node.from);
+      const lastLine = state.doc.lineAt(node.to);
+      // Caret inside the table means the user is editing it — leave the source
+      // alone (livePreviewTheme keeps those lines monospace).
+      if (state.selection.ranges.some((r) => r.to >= firstLine.from && r.from <= lastLine.to)) {
+        return;
+      }
+      const raw = state.doc.sliceString(firstLine.from, lastLine.to).split("\n");
+      const align =
+        raw[1] && splitRow(raw[1]).every((c) => ALIGN_ROW.test(c)) ? alignments(raw[1]) : [];
+      const rows = raw
+        .filter((_line, i) => i !== 1 || align.length === 0)
+        .filter((l) => l.trim() !== "")
+        .map(splitRow);
+      if (rows.length === 0) return;
+      out.push({
+        from: firstLine.from,
+        to: lastLine.to,
+        value: Decoration.replace({
+          block: true,
+          widget: new TableWidget(rows, align, firstLine.from),
+        }),
+      });
+    },
+  });
+  return Decoration.set(out, true);
+}
+
+const tableField = StateField.define<DecorationSet>({
+  create: (state) => buildTableDecorations(state),
+  update(value, tr) {
+    if (!tr.docChanged && !tr.selection) return value;
+    return buildTableDecorations(tr.state);
+  },
+  provide: (f) => EditorView.decorations.from(f),
+});
+
+/**
+ * Table lines keep a monospace face while the caret is inside them, so the
+ * pipes line up as you type. Applied as a plain line decoration from the
+ * plugin — this one is inline-level, so it is allowed there.
+ */
+function tableSourceLines(view: EditorView): Array<Range<Decoration>> {
+  const out: Array<Range<Decoration>> = [];
+  syntaxTree(view.state).iterate({
+    enter: (node) => {
+      if (node.name !== "Table") return;
+      const first = view.state.doc.lineAt(node.from);
+      const last = view.state.doc.lineAt(node.to);
+      if (!view.state.selection.ranges.some((r) => r.to >= first.from && r.from <= last.to)) return;
+      for (let n = first.number; n <= last.number; n++) {
+        out.push({ from: view.state.doc.line(n).from, to: view.state.doc.line(n).from, value: tableLine });
+      }
+    },
+  });
+  return out;
+}
+
 const livePreviewPlugin = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
@@ -167,6 +351,22 @@ const livePreviewTheme = EditorView.theme({
     fontSize: "0.9em",
     fontVariantNumeric: "tabular-nums",
   },
+  ".cm-md-table-render": { margin: "12px 0", cursor: "text", overflowX: "auto" },
+  ".cm-md-table-render table": {
+    borderCollapse: "collapse",
+    width: "100%",
+    fontSize: "0.95em",
+    fontVariantNumeric: "tabular-nums",
+  },
+  ".cm-md-table-render th, .cm-md-table-render td": {
+    border: "1px solid var(--border)",
+    padding: "6px 10px",
+    textAlign: "left",
+  },
+  ".cm-md-table-render th": {
+    background: "var(--bg-subtle, var(--nav-bg))",
+    fontWeight: "600",
+  },
 });
 
-export const livePreviewExtension: Extension = [livePreviewPlugin, livePreviewTheme];
+export const livePreviewExtension: Extension = [tableField, livePreviewPlugin, livePreviewTheme];
