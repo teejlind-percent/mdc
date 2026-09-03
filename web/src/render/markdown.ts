@@ -53,9 +53,29 @@ export function slugify(text: string): string {
 export function renderMarkdown(md: string): string {
   // Per-render slug counts: repeated heading text → slug, slug-1, slug-2.
   const slugCounts = new Map<string, number>();
-  // breaks: a single newline inside a paragraph renders as a line break (not a
-  // collapsed space), matching how notes are typically authored and read.
-  const marked = new Marked({ breaks: true });
+  // breaks: OFF, i.e. CommonMark/GFM — a single newline inside a paragraph is a
+  // soft wrap and collapses to a space. It used to be on, on the theory that
+  // notes are authored with meaningful newlines. That is wrong here for two
+  // reasons, and the second one is the expensive one:
+  //
+  //   1. Documents in review are hard-wrapped prose (agents and vendors wrap at
+  //      ~90-100 columns). `breaks: true` turns every one of those wrap points
+  //      into a <br>, so the rendered column breaks at the AUTHOR's column and
+  //      then soft-wraps again at the reader's — ragged long/short alternating
+  //      lines in a side-by-side pane.
+  //   2. <br> contributes NOTHING to textContent, so a selection spanning a
+  //      wrap point reads "the authorpressed enter" with the words glued
+  //      together. That string is the stored anchor quote. It cannot be found
+  //      in the raw markdown (which has a newline there), and whitespace
+  //      normalization cannot recover it either — there is no whitespace to
+  //      collapse. The card orphans in edit mode, resolveLine picks the wrong
+  //      line, and the suggestion diff reports phantom changes at every wrap.
+  //
+  // With breaks off the newline survives into the HTML as real whitespace, so
+  // the browser collapses it for display AND the anchor round-trips through the
+  // existing whitespace-normalized fuzzy match. Explicit hard breaks (two
+  // trailing spaces, or a trailing backslash) still render as <br>.
+  const marked = new Marked({ breaks: false });
   marked.use({
     tokenizer: {
       del(src: string) {

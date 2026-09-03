@@ -28,7 +28,8 @@ export interface OutlineNode extends Heading {
 export function extractHeadings(md: string): Heading[] {
   // Same config as renderMarkdown — `breaks` doesn't affect headings, but lexing
   // with the same instance keeps token parsing identical if that ever changes.
-  const marked = new Marked({ breaks: true });
+  // It must therefore track renderMarkdown's value, not be pinned separately.
+  const marked = new Marked({ breaks: false });
   const tokens = marked.lexer(md);
 
   // Per-document slug counts, mirroring the renderer: repeated heading text →

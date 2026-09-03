@@ -9,7 +9,7 @@
  * primitives live in the core; this module is the create-time, DOM-aware side.
  */
 
-import { allIndexesOf, captureContext, stripInlineMd } from "../../../src/anchor.js";
+import { allIndexesOf, captureContext, fuzzyFind, stripInlineMd } from "../../../src/anchor.js";
 import type { AnchorContext } from "../api.js";
 
 const BLOCK_TAGS = new Set([
@@ -68,12 +68,19 @@ export function computeAnchorContext(
 
 /**
  * 1-indexed raw-markdown line for a selection. Primary: the quote appears
- * verbatim in raw. Fallback: match the enclosing block's text against
- * markdown-stripped raw lines. Null when neither resolves.
+ * verbatim in raw. Then: the same whitespace-normalized match the display
+ * matcher uses — a quote spanning a hard wrap carries a space where raw has a
+ * newline, and without this step it fell through to the block fallback and
+ * reported the block's FIRST line for every such selection. Last: match the
+ * enclosing block's text against markdown-stripped raw lines. Null when none
+ * resolve.
  */
 export function resolveLine(rawMd: string, quote: string, blockText: string): number | null {
   const rawIdx = rawMd.indexOf(quote);
   if (rawIdx >= 0) return rawMd.slice(0, rawIdx).split("\n").length;
+
+  const fuzzy = fuzzyFind(rawMd, quote);
+  if (fuzzy) return rawMd.slice(0, fuzzy.startIdx).split("\n").length;
 
   const key = blockText.slice(0, 40).trim();
   if (!key) return null;

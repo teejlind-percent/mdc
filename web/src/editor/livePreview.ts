@@ -225,6 +225,33 @@ class MermaidWidget extends WidgetType {
 }
 
 /** Node types whose text is pure syntax — safe to hide when not being edited. */
+/**
+ * An explicit hard break (two trailing spaces, or a trailing backslash), drawn
+ * as a visible glyph.
+ *
+ * It has to be visible because the renderer treats a plain newline as a soft
+ * wrap: a hard break is now the ONLY way to force a line break, so it carries
+ * meaning the rest of the document does not. Both spellings were unreadable
+ * here — trailing spaces show nothing at all, and a backslash shows as a stray
+ * backslash that looks like a typo. One glyph for both, and the raw characters
+ * come back the moment the caret lands on that line.
+ */
+class HardBreakWidget extends WidgetType {
+  toDOM(): HTMLElement {
+    const el = document.createElement("span");
+    el.className = "cm-md-hardbreak";
+    el.textContent = "\u21b5"; // ↵
+    el.title = "Hard line break";
+    return el;
+  }
+  eq(): boolean {
+    return true;
+  }
+  ignoreEvent(): boolean {
+    return false;
+  }
+}
+
 const CONCEALED_MARKS = new Set([
   "HeaderMark",
   "EmphasisMark",
@@ -236,6 +263,7 @@ const CONCEALED_MARKS = new Set([
 const CONCEALED_IN_LINK = new Set(["URL"]);
 
 const hidden = Decoration.replace({});
+const hardBreak = Decoration.replace({ widget: new HardBreakWidget() });
 const codeMark = Decoration.mark({ class: "cm-md-code" });
 // Tables are the one construct a proportional face actively breaks: the pipes
 // stop lining up and the source becomes unreadable while you edit it. A line
@@ -277,6 +305,19 @@ function buildDecorations(view: EditorView): DecorationSet {
         // it is the only signal left once the backticks are concealed.
         if (node.name === "InlineCode" || node.name === "FencedCode" || node.name === "CodeBlock") {
           marks.push({ from: node.from, to: node.to, value: codeMark });
+          return;
+        }
+
+        // A hard break's node spans the trailing marker AND the newline that
+        // follows it. Only the marker may be replaced — swallowing the newline
+        // would splice the two lines into one on screen, which is the opposite
+        // of what the break says.
+        if (node.name === "HardBreak") {
+          if (active.has(view.state.doc.lineAt(node.from).number)) return;
+          const markerEnd = node.to - 1;
+          if (markerEnd > node.from) {
+            replaces.push({ from: node.from, to: markerEnd, value: hardBreak });
+          }
           return;
         }
 
@@ -446,9 +487,26 @@ const livePreviewTheme = EditorView.theme({
     fontFamily: "var(--doc-font, inherit)",
     fontVariantLigatures: "none",
   },
+  // Hanging indent on soft wraps. A source line wider than the column wraps
+  // again, and without this the overhang is indistinguishable from the next
+  // line of the file — so a 100-column paragraph reads as an arbitrary ragged
+  // block and you cannot tell which visual lines are real lines. The negative
+  // text-indent pulls the FIRST line of each .cm-line back to the gutter and
+  // leaves every continuation inset. Block widgets (tables, mermaid) render
+  // outside .cm-line, so they are untouched.
+  ".cm-content > .cm-line": {
+    textIndent: "-1.4em",
+    paddingLeft: "1.4em",
+  },
   ".cm-md-code": {
     fontFamily: "var(--mono-font, ui-monospace, SFMono-Regular, Menlo, monospace)",
     fontSize: "0.92em",
+  },
+  ".cm-md-hardbreak": {
+    color: "var(--text-faint, var(--text-muted))",
+    opacity: "0.55",
+    fontSize: "0.85em",
+    paddingLeft: "2px",
   },
   ".cm-md-table": {
     fontFamily: "var(--mono-font, ui-monospace, SFMono-Regular, Menlo, monospace)",

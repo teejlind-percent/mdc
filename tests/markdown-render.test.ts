@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { fuzzyFind } from "../src/anchor.js";
 import { renderMarkdown } from "../web/src/render/markdown.js";
+import { resolveLine } from "../web/src/render/createAnchor.js";
 
 describe("markdown rendering", () => {
   it("closes self-closing non-void HTML tags so later markdown remains outside them", () => {
@@ -79,5 +81,43 @@ a ~ b
     const html = renderMarkdown(md);
     // A nested list = a <ul> that appears inside a parent <li>.
     expect(/<li[^>]*>[\s\S]*?<ul/.test(html)).toBe(true);
+  });
+});
+
+describe("hard-wrapped prose", () => {
+  const wrapped = [
+    "This is a hard-wrapped paragraph where the author",
+    "pressed enter at a natural column, the way most",
+    "markdown files in the workspace are written.",
+  ].join("\n");
+
+  it("treats a single newline as a soft wrap, not a line break", () => {
+    const html = renderMarkdown(`${wrapped}\n`);
+    expect(html).not.toContain("<br>");
+    // The newline survives as real whitespace, so the browser collapses it for
+    // display and textContent keeps a separator between the words.
+    expect(html).toContain("where the author\npressed enter");
+  });
+
+  it("keeps a selection spanning a wrap point matchable against the raw source", () => {
+    // textContent, as the browser computes it: tags contribute nothing, so a
+    // <br> leaves NO separator between the words on either side of it.
+    const textContent = (html: string) => html.replace(/<[^>]+>/g, "").trim();
+    const rendered = textContent(renderMarkdown(`${wrapped}\n`));
+    // What the browser hands back for a selection across the wrap point.
+    const quote = rendered.slice(
+      rendered.indexOf("where the author"),
+      rendered.indexOf("pressed enter") + "pressed enter".length,
+    );
+    // Words must not be glued together — <br> contributes nothing to
+    // textContent, which is what broke anchoring.
+    expect(quote).not.toContain("authorpressed");
+    expect(fuzzyFind(wrapped, quote)).not.toBeNull();
+    expect(resolveLine(wrapped, quote, rendered)).toBe(1);
+  });
+
+  it("still honours explicit hard breaks", () => {
+    expect(renderMarkdown("One.  \nTwo.\n")).toContain("<br>");
+    expect(renderMarkdown("One.\\\nTwo.\n")).toContain("<br>");
   });
 });
