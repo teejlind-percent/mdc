@@ -234,6 +234,19 @@ export function highlightY(
   return rect.top - containerRect.top + container.scrollTop;
 }
 
+/** A highlight's bounding rect in VIEWPORT coordinates, or null if unpainted. */
+export function highlightViewportRect(
+  overlay: HTMLElement,
+  commentId: string,
+): DOMRect | null {
+  const el = overlay.querySelector<HTMLElement>(
+    `${RECT_SELECTOR}[data-comment-id="${CSS.escape(commentId)}"]`,
+  );
+  if (!el) return null;
+  const rect = el.getBoundingClientRect();
+  return rect.width === 0 && rect.height === 0 ? null : rect;
+}
+
 /** Scroll the doc so a highlight is visible, with a brief flash on its rects. */
 export function scrollToHighlight(overlay: HTMLElement, commentId: string): void {
   const els = Array.from(
@@ -242,7 +255,15 @@ export function scrollToHighlight(overlay: HTMLElement, commentId: string): void
     ),
   );
   if (els.length === 0) return;
-  els[0]!.scrollIntoView({ behavior: "smooth", block: "center" });
+  // Only scroll if the text is actually out of reach. Clicking a card whose
+  // highlight is already on screen used to re-centre the page under the user
+  // for no reason; with cards pinned to their anchors that is the common case,
+  // and the jolt reads as the document running away from the click.
+  const rect = els[0]!.getBoundingClientRect();
+  const viewH = window.innerHeight || document.documentElement.clientHeight;
+  const margin = Math.min(80, viewH * 0.15);
+  const comfortablyVisible = rect.top >= margin && rect.bottom <= viewH - margin;
+  if (!comfortablyVisible) els[0]!.scrollIntoView({ behavior: "smooth", block: "center" });
   // Re-trigger the flash even if a previous one is still mid-animation: drop the
   // class, then re-add on the next frame. Flash every rect of the highlight.
   for (const el of els) el.classList.remove("flash");

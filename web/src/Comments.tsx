@@ -22,7 +22,8 @@ import { findTargetStrict } from "../../src/anchor.js";
 import type { DisplayThread, PendingComment } from "./commentData.js";
 import type { CommentAnchorY } from "./commentLines.js";
 import { fmtTime, resolveEventsByThread } from "./commentData.js";
-import { highlightY, scrollToHighlight } from "./render/highlights.js";
+import { stackTops } from "./cardStack.js";
+import { highlightViewportRect, highlightY, scrollToHighlight } from "./render/highlights.js";
 import { CommentMenu } from "./CommentMenu.js";
 import { DropdownMenu } from "./DropdownMenu.js";
 import { CloseIcon, FunnelIcon } from "./icons.js";
@@ -69,16 +70,26 @@ function flowItems(items: HTMLElement[], list: HTMLElement, start = 6): number {
   return cursor;
 }
 
-function stackItems(items: HTMLElement[], list: HTMLElement, start = 6): number {
-  let cursor = start;
+function stackItems(
+  items: HTMLElement[],
+  list: HTMLElement,
+  start = 6,
+  focusId?: string | null,
+): number {
   items.sort((a, b) => Number(a.dataset.anchorY ?? 0) - Number(b.dataset.anchorY ?? 0));
-  for (const card of items) {
-    const anchorY = Number(card.dataset.anchorY ?? 0);
-    const top = Math.max(anchorY, cursor);
-    card.style.top = `${top}px`;
-    card.style.visibility = "";
-    cursor = top + card.offsetHeight + CARD_GAP;
+  const focusIdx = focusId ? items.findIndex((c) => c.dataset.sidebarId === focusId) : -1;
+  const tops = stackTops(
+    items.map((c) => ({ anchor: Number(c.dataset.anchorY ?? 0), height: c.offsetHeight })),
+    start,
+    CARD_GAP,
+    focusIdx,
+  );
+  for (let i = 0; i < items.length; i++) {
+    items[i]!.style.top = `${tops[i]}px`;
+    items[i]!.style.visibility = "";
   }
+  const n = items.length;
+  const cursor = n > 0 ? tops[n - 1]! + items[n - 1]!.offsetHeight + CARD_GAP : start;
   list.style.minHeight = cursor > start ? `${cursor + 40}px` : "";
   return cursor;
 }
@@ -178,11 +189,23 @@ export function Comments({
   // Bumped by a card when its height changes in place (reply form open/close,
   // replies expand/collapse, textarea autogrow) so the cards below re-flow.
   const [layoutTick, setLayoutTick] = useState(0);
+  // The card the user is working in. It gets pinned to its own anchor and the
+  // rest of the stack moves around it, so a reply box never drags the document
+  // away from the text it is about. A stale id (file switched, thread resolved)
+  // is simply not found at layout time and the stack falls back to packing
+  // downward, so it needs no explicit teardown.
+  const [activeId, setActiveId] = useState<string | null>(null);
   const reposition = useRef(() => setLayoutTick((t) => t + 1)).current;
   const open = threads.filter((t) => !t.resolved);
   const resolved = threads.filter((t) => t.resolved);
   const orphanSet = new Set(orphanIds);
   const decisions = decidedSuggestions(entries);
+
+  // A new selection means the user is done with whatever card was pinned; the
+  // composer is the thing that now needs to sit at its anchor.
+  useEffect(() => {
+    if (pending) setActiveId(null);
+  }, [pending]);
 
   // Don't strand the user in an empty Resolved view (e.g. they just unresolved
   // the last one) — fall back to Open.
@@ -232,7 +255,7 @@ export function Comments({
           card.dataset.anchorY = String(hostTop + y);
           positioned.push(card);
         }
-        cursor = stackItems(positioned, list, start);
+        cursor = stackItems(positioned, list, start, activeId);
         if (unpositioned.length > 0) flowItems(unpositioned, list, cursor);
         return;
       }
@@ -253,19 +276,73 @@ export function Comments({
       }
       const anchored = items.filter((card) => !card.classList.contains("is-orphaned"));
       const orphaned = items.filter((card) => card.classList.contains("is-orphaned"));
-      cursor = stackItems(anchored, list, start);
+      cursor = stackItems(anchored, list, start, activeId);
       if (orphaned.length > 0) flowItems(orphaned, list, cursor);
     };
 
     place();
     const r1 = requestAnimationFrame(() => {
       place();
-      requestAnimationFrame(place);
+      requestAnimationFrame(() => {
+        place();
+        // Cards slide when the stack re-forms around a newly pinned card, which
+        // is how you see what moved. Armed only after the first placement has
+        // settled — animating the initial 0 → anchor jump would be a visible
+        // flash of every card flying down the column on load.
+        list.dataset.placed = "1";
+      });
     });
     // No scroll listener: the sidebar grows with the page and scrolls natively,
     // so once placed a card translates in lockstep with the doc.
     return () => cancelAnimationFrame(r1);
-  }, [open, resolved, effectiveView, overlayRoot, paintTick, resizeTick, layoutTick, pending, collapsed, editing, editAnchorYs, editorHost]);
+  }, [open, resolved, effectiveView, overlayRoot, paintTick, resizeTick, layoutTick, pending, collapsed, editing, editAnchorYs, editorHost, activeId]);
+
+  // Pinning a card puts it beside its anchor, but on a short pane a tall card
+  // can still hang below the fold — and the browser's own focus scroll (now
+  // suppressed) used to "fix" that by scrolling the anchor off the top, which
+  // is the whole complaint. So scroll deliberately instead, and only as far as
+  // it takes to get the card AND its text on screen together. The anchor wins
+  // when both cannot fit: reading the passage matters more than seeing the
+  // whole card, which the user can scroll to themselves.
+  // Re-checked on every relayout of the active card, not just on activation:
+  // opening the reply form grows the card AFTER it is pinned, and a check that
+  // ran only once fired while the card was still short and concluded, wrongly,
+  // that it already fitted. A cooldown keeps a smooth scroll from being
+  // measured mid-flight and doubled.
+  const lastScrollAt = useRef(0);
+  useEffect(() => {
+    if (!activeId) return;
+    const list = listRef.current;
+    if (!list || !overlayRoot) return;
+    const raf = requestAnimationFrame(() => {
+      const card = list.querySelector<HTMLElement>(
+        `.comment[data-sidebar-id="${CSS.escape(activeId)}"]`,
+      );
+      const anchor = highlightViewportRect(overlayRoot, activeId);
+      if (!card || !anchor) return;
+      const cardRect = card.getBoundingClientRect();
+      const viewH = window.innerHeight || document.documentElement.clientHeight;
+      const margin = Math.min(24, viewH * 0.06);
+      const top = Math.min(cardRect.top, anchor.top);
+      const bottom = Math.max(cardRect.bottom, anchor.bottom);
+
+      let delta = 0;
+      if (bottom - top > viewH - margin * 2) {
+        // Can't show both. Put the anchor near the top and let the card run on.
+        delta = anchor.top - margin;
+      } else if (top < margin) {
+        delta = top - margin;
+      } else if (bottom > viewH - margin) {
+        delta = bottom - (viewH - margin);
+      }
+      if (Math.abs(delta) < 2) return;
+      const now = performance.now();
+      if (now - lastScrollAt.current < 500) return;
+      lastScrollAt.current = now;
+      window.scrollBy({ top: delta, behavior: "smooth" });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [activeId, overlayRoot, layoutTick]);
 
   // Reposition on window resize (anchor Ys shift with wrap width).
   useLayoutEffect(() => {
@@ -347,6 +424,8 @@ export function Comments({
                   decisions={decisions}
                   actionable={actionableSuggestion(entries, t.top.id)}
                   rawContent={rawContent}
+                  active={activeId === t.top.id}
+                  onActivate={setActiveId}
                   onEditModeClick={editing ? onEditModeCardClick : undefined}
                   onEditModeSuggestionPreview={editing ? onEditModeSuggestionPreview : undefined}
                 />
@@ -470,7 +549,9 @@ function PendingCard({
   const taRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    taRef.current?.focus();
+    // preventScroll: the card is positioned against its anchor; letting the
+    // browser scroll to the textarea instead drags the document off the text.
+    taRef.current?.focus({ preventScroll: true });
   }, []);
 
   return (
@@ -539,6 +620,8 @@ function ThreadCard({
   decisions,
   actionable,
   rawContent,
+  active,
+  onActivate,
   onEditModeClick,
   onEditModeSuggestionPreview,
 }: {
@@ -563,6 +646,9 @@ function ThreadCard({
   decisions: Map<string, "applied" | "dismissed">;
   actionable: Entry | undefined;
   rawContent: string | null;
+  /** This card is pinned to its anchor; the rest of the stack moves around it. */
+  active: boolean;
+  onActivate: (commentId: string) => void;
   onEditModeClick?: (commentId: string) => void;
   onEditModeSuggestionPreview?: (threadId: string, suggestionId: string, suggestion: Suggestion) => void;
 }) {
@@ -582,14 +668,14 @@ function ThreadCard({
   useEffect(() => reposition(), [expanded, replying, editing, reposition]);
 
   useEffect(() => {
-    if (replying) replyRef.current?.focus();
+    if (replying) replyRef.current?.focus({ preventScroll: true });
   }, [replying]);
 
   useEffect(() => {
     if (replyPromptNonce === undefined) return;
     setReasonPrompt(true);
     setReplying(true);
-    replyRef.current?.focus();
+    replyRef.current?.focus({ preventScroll: true });
     onReplyPromptShown();
   }, [replyPromptNonce, onReplyPromptShown]);
 
@@ -649,10 +735,15 @@ function ThreadCard({
 
   return (
     <div
-      className={`comment ${roleClass(top.author, user)}${orphaned ? " is-orphaned" : ""}`}
+      className={`comment ${roleClass(top.author, user)}${orphaned ? " is-orphaned" : ""}${active ? " is-active" : ""}`}
       data-sidebar-id={top.id}
       style={{ position: "absolute", left: 8, right: 20, top: 0, visibility: "hidden" }}
       title="Click to jump to highlighted text"
+      // Capture, and on pointerdown: the pin has to be in place BEFORE the
+      // browser focuses a reply textarea, or it scrolls to the card's old
+      // position first and the fix arrives a frame too late.
+      onPointerDownCapture={() => onActivate(top.id)}
+      onFocusCapture={() => onActivate(top.id)}
       onClick={(e) => {
         const tag = (e.target as HTMLElement).tagName;
         if (tag === "BUTTON" || tag === "A" || tag === "TEXTAREA" || tag === "INPUT") return;
@@ -1038,7 +1129,7 @@ function EditForm({
   useEffect(() => {
     const ta = taRef.current;
     if (ta) {
-      ta.focus();
+      ta.focus({ preventScroll: true });
       autogrow(ta);
       ta.setSelectionRange(ta.value.length, ta.value.length);
     }

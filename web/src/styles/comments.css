@@ -218,6 +218,22 @@
     border-color 0.15s;
   overflow: hidden;
 }
+/* Once the column has placed its cards, repositions animate — the "push out of
+   the way" motion when a card is pinned to its anchor (see stackItems). */
+.comment-list[data-placed] .comment {
+  transition:
+    top 0.18s ease,
+    box-shadow 0.15s,
+    border-color 0.15s;
+}
+/* The pinned card. Deliberately quiet — it marks which card owns the stack's
+   alignment, it is not a selection highlight. */
+.comment.is-active {
+  border-color: var(--comment, var(--border-mid));
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.06),
+    0 6px 18px rgba(0, 0, 0, 0.10);
+}
 .comment:hover {
   box-shadow:
     0 2px 4px rgba(0, 0, 0, 0.06),
