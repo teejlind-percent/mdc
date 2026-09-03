@@ -812,6 +812,7 @@ function ThreadCard({
             top.id === actionableSuggestionId ? () => dismissSuggestion(top.id) : undefined
           }
           onPreview={top.id === actionableSuggestionId ? pinPreview : undefined}
+          blocked={top.id === actionableSuggestionId && decisionBlocked}
           accepting={applyingId === top.id}
           rejecting={dismissingId === top.id}
         />
@@ -843,6 +844,7 @@ function ThreadCard({
                   r.id === actionableSuggestionId ? () => dismissSuggestion(r.id) : undefined
                 }
                 onPreview={r.id === actionableSuggestionId ? pinPreview : undefined}
+                blocked={r.id === actionableSuggestionId && decisionBlocked}
                 accepting={applyingId === r.id}
                 rejecting={dismissingId === r.id}
               />
@@ -944,6 +946,7 @@ function Reply({
   onPreview,
   accepting,
   rejecting,
+  blocked,
 }: {
   reply: DisplayThread["replies"][number];
   user: string;
@@ -957,6 +960,7 @@ function Reply({
   onPreview?: () => void;
   accepting: boolean;
   rejecting: boolean;
+  blocked: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   useEffect(() => reposition(), [editing, reposition]);
@@ -992,6 +996,7 @@ function Reply({
           onAccept={onAccept}
           onReject={onReject}
           onPreview={onPreview}
+          blocked={blocked}
           accepting={accepting}
           rejecting={rejecting}
         />
@@ -1021,6 +1026,7 @@ function SuggestionBlock({
   onPreview,
   accepting = false,
   rejecting = false,
+  blocked = false,
 }: {
   suggestion: Suggestion;
   superseded: boolean;
@@ -1030,6 +1036,8 @@ function SuggestionBlock({
   onPreview?: () => void;
   accepting?: boolean;
   rejecting?: boolean;
+  /** The target span no longer matches the document, so Accept cannot run. */
+  blocked?: boolean;
 }) {
   const diff = shapeSuggestionDiff(suggestion.target.quote, suggestion.replacement);
   const lineCounts = suggestionDiffLineCounts(suggestion.target.quote, suggestion.replacement);
@@ -1087,6 +1095,19 @@ function SuggestionBlock({
             </div>
           </div>
         </>
+      )}
+      {/* A stale target used to remove the Accept button and say nothing, which
+          read as the button randomly disappearing — you edit a word inside the
+          block a suggestion covers (or within ~40 characters either side of
+          it) and Accept is silently gone, with Reject still sitting there
+          looking healthy. Refusing to apply is right; applying a replacement
+          whose target has moved would corrupt the document. Being quiet about
+          it is not. */}
+      {blocked && (
+        <div className="suggestion-blocked" role="status">
+          Can’t apply — the text this targets has changed. Ask for the
+          suggestion again against the current wording, or Reject it.
+        </div>
       )}
       {(onAccept || onReject) && (
         <div className="suggestion-actions">

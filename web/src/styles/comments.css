@@ -478,6 +478,19 @@
   color: var(--text-faint);
   font-style: italic;
 }
+/* Why Accept is unavailable. Muted, not alarming — a stale target is a normal
+   consequence of editing the document while a suggestion is open. */
+.suggestion-blocked {
+  margin: 8px 0 0;
+  padding: 7px 9px;
+  border: 1px dashed var(--border-mid);
+  border-radius: 6px;
+  background: var(--bg-soft, var(--bg));
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .suggestion-actions {
   display: flex;
   justify-content: flex-end;
