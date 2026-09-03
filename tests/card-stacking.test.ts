@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { stackTops } from "../web/src/cardStack.js";
+import { clusterAround, stackTops } from "../web/src/cardStack.js";
 
 const START = 6;
 const GAP = 8;
@@ -91,5 +91,33 @@ describe("comment card stacking", () => {
     expect(tops([])).toEqual([]);
     expect(tops(cluster, 99)).toEqual(tops(cluster));
     expect(tops(cluster, -1)).toEqual(tops(cluster));
+  });
+});
+
+describe("clustering", () => {
+  it("groups comments packed onto one paragraph", () => {
+    expect(clusterAround([292, 318, 345], 2)).toEqual([0, 1, 2]);
+    expect(clusterAround([292, 318, 345], 0)).toEqual([0, 1, 2]);
+  });
+
+  it("does not reach across a gap to an unrelated cluster", () => {
+    const anchors = [292, 318, 345, 1050, 1077, 1103];
+    expect(clusterAround(anchors, 5)).toEqual([3, 4, 5]);
+    expect(clusterAround(anchors, 0)).toEqual([0, 1, 2]);
+  });
+
+  it("leaves a well-spaced comment on its own", () => {
+    expect(clusterAround([100, 900, 1800], 1)).toEqual([1]);
+  });
+
+  it("stops at the first gap, not the first close pair", () => {
+    // 0-1 close, 1-2 far, 2-3 close: focusing 2 must not pull in 0 or 1.
+    expect(clusterAround([100, 200, 900, 1000], 2)).toEqual([2, 3]);
+  });
+
+  it("handles an out-of-range focus", () => {
+    expect(clusterAround([100, 200], -1)).toEqual([]);
+    expect(clusterAround([100, 200], 5)).toEqual([]);
+    expect(clusterAround([], 0)).toEqual([]);
   });
 });

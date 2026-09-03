@@ -22,7 +22,7 @@ import { findTargetStrict } from "../../src/anchor.js";
 import type { DisplayThread, PendingComment } from "./commentData.js";
 import type { CommentAnchorY } from "./commentLines.js";
 import { fmtTime, resolveEventsByThread } from "./commentData.js";
-import { stackTops } from "./cardStack.js";
+import { clusterAround, stackTops } from "./cardStack.js";
 import { highlightViewportRect, highlightY, scrollToHighlight } from "./render/highlights.js";
 import { CommentMenu } from "./CommentMenu.js";
 import { DropdownMenu } from "./DropdownMenu.js";
@@ -195,6 +195,10 @@ export function Comments({
   // is simply not found at layout time and the stack falls back to packing
   // downward, so it needs no explicit teardown.
   const [activeId, setActiveId] = useState<string | null>(null);
+  // Ids condensed to a one-line summary because they crowd the active card.
+  // Google Docs does this: when you open one comment in a cluster, its
+  // neighbours get out of the way rather than pushing it off its anchor.
+  const [condensedIds, setCondensedIds] = useState<ReadonlySet<string>>(new Set());
   const reposition = useRef(() => setLayoutTick((t) => t + 1)).current;
   const open = threads.filter((t) => !t.resolved);
   const resolved = threads.filter((t) => t.resolved);
@@ -206,6 +210,10 @@ export function Comments({
   useEffect(() => {
     if (pending) setActiveId(null);
   }, [pending]);
+
+  useEffect(() => {
+    if (!activeId) setCondensedIds((prev) => (prev.size === 0 ? prev : new Set()));
+  }, [activeId]);
 
   // Don't strand the user in an empty Resolved view (e.g. they just unresolved
   // the last one) — fall back to Open.
@@ -219,6 +227,27 @@ export function Comments({
     // While collapsed the panel is display:none — measuring would read zeros and
     // stack every card at the top. Skip; the reopen effect re-places once visible.
     if (collapsed) return;
+
+    // Which cards are crowding the active one. Anchors only — see clusterAround.
+    const syncCondensed = (cards: HTMLElement[]) => {
+      if (!activeId) return;
+      const sorted = [...cards].sort(
+        (a, b) => Number(a.dataset.anchorY ?? 0) - Number(b.dataset.anchorY ?? 0),
+      );
+      const focusIdx = sorted.findIndex((c) => c.dataset.sidebarId === activeId);
+      if (focusIdx < 0) return;
+      const anchors = sorted.map((c) => Number(c.dataset.anchorY ?? 0));
+      const next = new Set(
+        clusterAround(anchors, focusIdx)
+          .filter((i) => i !== focusIdx)
+          .map((i) => sorted[i]!.dataset.sidebarId!)
+          .filter(Boolean),
+      );
+      setCondensedIds((prev) => {
+        if (prev.size === next.size && [...next].every((id) => prev.has(id))) return prev;
+        return next;
+      });
+    };
 
     const place = () => {
       const items = Array.from(list.querySelectorAll<HTMLElement>(".comment, .resolved-item"));
@@ -255,6 +284,7 @@ export function Comments({
           card.dataset.anchorY = String(hostTop + y);
           positioned.push(card);
         }
+        syncCondensed(positioned);
         cursor = stackItems(positioned, list, start, activeId);
         if (unpositioned.length > 0) flowItems(unpositioned, list, cursor);
         return;
@@ -276,6 +306,7 @@ export function Comments({
       }
       const anchored = items.filter((card) => !card.classList.contains("is-orphaned"));
       const orphaned = items.filter((card) => card.classList.contains("is-orphaned"));
+      syncCondensed(anchored);
       cursor = stackItems(anchored, list, start, activeId);
       if (orphaned.length > 0) flowItems(orphaned, list, cursor);
     };
@@ -425,6 +456,7 @@ export function Comments({
                   actionable={actionableSuggestion(entries, t.top.id)}
                   rawContent={rawContent}
                   active={activeId === t.top.id}
+                  condensed={condensedIds.has(t.top.id)}
                   onActivate={setActiveId}
                   onEditModeClick={editing ? onEditModeCardClick : undefined}
                   onEditModeSuggestionPreview={editing ? onEditModeSuggestionPreview : undefined}
@@ -621,6 +653,7 @@ function ThreadCard({
   actionable,
   rawContent,
   active,
+  condensed,
   onActivate,
   onEditModeClick,
   onEditModeSuggestionPreview,
@@ -648,6 +681,8 @@ function ThreadCard({
   rawContent: string | null;
   /** This card is pinned to its anchor; the rest of the stack moves around it. */
   active: boolean;
+  /** Crowding the active card — shown as a one-line summary until clicked. */
+  condensed: boolean;
   onActivate: (commentId: string) => void;
   onEditModeClick?: (commentId: string) => void;
   onEditModeSuggestionPreview?: (threadId: string, suggestionId: string, suggestion: Suggestion) => void;
@@ -735,7 +770,7 @@ function ThreadCard({
 
   return (
     <div
-      className={`comment ${roleClass(top.author, user)}${orphaned ? " is-orphaned" : ""}${active ? " is-active" : ""}`}
+      className={`comment ${roleClass(top.author, user)}${orphaned ? " is-orphaned" : ""}${active ? " is-active" : ""}${condensed ? " is-condensed" : ""}`}
       data-sidebar-id={top.id}
       style={{ position: "absolute", left: 8, right: 20, top: 0, visibility: "hidden" }}
       title="Click to jump to highlighted text"
@@ -763,6 +798,20 @@ function ThreadCard({
         }
       }}
     >
+      {condensed ? (
+        // One line: who, and enough of the body to recognise the thread. The
+        // whole row is the click target — activating it expands this card and
+        // condenses whichever one was active, so a cluster only ever has one
+        // card open at a time.
+        <div className="condensed-row" title={top.body}>
+          <span className={`avatar ${roleClass(top.author, user)}`}>
+            {initials(top.author, user)}
+          </span>
+          <span className="condensed-body">{top.body}</span>
+          {replies.length > 0 && <span className="condensed-count">{replies.length + 1}</span>}
+        </div>
+      ) : (
+      <>
       <div className="hdr">
         <span className={`avatar ${roleClass(top.author, user)}`}>{initials(top.author, user)}</span>
         <span className="author">{top.author}</span>
@@ -928,6 +977,8 @@ function ThreadCard({
             Reply
           </button>
         </div>
+      )}
+      </>
       )}
     </div>
   );

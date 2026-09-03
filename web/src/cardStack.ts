@@ -76,3 +76,40 @@ export function stackTops(
   return tops;
 }
 
+
+/**
+ * How far apart two anchors must be before their cards stop being treated as
+ * one cluster. Roughly the height of an ordinary expanded card: closer than
+ * this and the two cannot both sit at their anchors, so one is displacing the
+ * other.
+ */
+export const CLUSTER_GAP = 220;
+
+/**
+ * The run of cards crowding the focused one — the maximal stretch of
+ * consecutive cards, containing focusIdx, whose neighbouring anchors are within
+ * `maxGap` of each other.
+ *
+ * Deliberately computed from ANCHORS ALONE, never from measured heights. The
+ * cards in a cluster are about to be condensed, which changes their heights,
+ * which would change cluster membership, which would change their heights: a
+ * layout that oscillates. Anchors do not move when a card condenses, so this
+ * is a fixed point.
+ */
+export function clusterAround(
+  anchors: readonly number[],
+  focusIdx: number,
+  maxGap = CLUSTER_GAP,
+): number[] {
+  if (focusIdx < 0 || focusIdx >= anchors.length) return [];
+  const out = [focusIdx];
+  for (let i = focusIdx - 1; i >= 0; i--) {
+    if (anchors[i + 1]! - anchors[i]! > maxGap) break;
+    out.unshift(i);
+  }
+  for (let i = focusIdx + 1; i < anchors.length; i++) {
+    if (anchors[i]! - anchors[i - 1]! > maxGap) break;
+    out.push(i);
+  }
+  return out;
+}

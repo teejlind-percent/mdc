@@ -478,6 +478,44 @@
   color: var(--text-faint);
   font-style: italic;
 }
+/* ── Condensed card ──
+   A neighbour of the active card, collapsed to one line so it stops pushing
+   the active one off its anchor. Whole row is the click target; clicking it
+   makes it the active card, which expands it and condenses the one it
+   replaced. */
+.comment.is-condensed {
+  cursor: pointer;
+}
+.condensed-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  min-width: 0;
+}
+.condensed-body {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+.condensed-count {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 9px;
+  background: var(--bg-soft, var(--bg));
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.comment.is-condensed:hover .condensed-body {
+  color: var(--text);
+}
+
 /* Why Accept is unavailable. Muted, not alarming — a stale target is a normal
    consequence of editing the document while a suggestion is open. */
 .suggestion-blocked {
